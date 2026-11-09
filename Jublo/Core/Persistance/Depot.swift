@@ -23,11 +23,12 @@ final class Depot {
     // MARK: - Listes
 
     /// Ajoute un élément à une liste. Renvoie nil si le titre est vide.
+    /// `destinataire` ne compte que pour la wish list (par défaut : l'auteur).
     @discardableResult
-    func ajouter(_ titre: String, a type: TypeListe, par membre: Membre) -> ElementListe? {
+    func ajouter(_ titre: String, a type: TypeListe, par membre: Membre, pour destinataire: Membre? = nil) -> ElementListe? {
         let titre = titre.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !titre.isEmpty else { return nil }
-        let element = ElementListe(type: type, titre: titre, auteur: membre, le: horloge())
+        let element = ElementListe(type: type, titre: titre, auteur: membre, pour: destinataire, le: horloge())
         contexte.insert(element)
         enregistrer()
         return element

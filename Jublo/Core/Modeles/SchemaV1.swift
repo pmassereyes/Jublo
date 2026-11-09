@@ -1,10 +1,11 @@
+import Foundation
 import SwiftData
 
-/// Version 1 du schéma. Toute évolution des modèles passe par une nouvelle version
-/// (`SchemaV2`…) ajoutée à `PlanMigrationJublo`.
+/// Version 1 du schéma, figée : elle sert uniquement à migrer les bases existantes.
+/// Ne plus modifier ce fichier ; toute évolution passe par une nouvelle version.
 ///
-/// Contraintes CloudKit (phase 2) : propriétés optionnelles ou avec valeur par défaut,
-/// pas de `@Attribute(.unique)`, relations optionnelles.
+/// Un modèle inchangé reste déclaré dans la dernière version où il a changé :
+/// `Cagnotte` et `Versement` vivent encore ici et sont repris par les versions suivantes.
 enum SchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
 
@@ -13,11 +14,29 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
-enum PlanMigrationJublo: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }
-    static var stages: [MigrationStage] { [] }
-}
+extension SchemaV1 {
+    /// Élément de liste tel qu'en V1 (sans destinataire).
+    @Model
+    final class ElementListe {
+        var id: UUID = UUID()
+        var typeBrut: String = TypeListe.penseBete.rawValue
+        var titre: String = ""
+        var estCoche: Bool = false
+        var cocheLe: Date?
+        var cochePar: String?
 
-typealias ElementListe = SchemaV1.ElementListe
-typealias Cagnotte = SchemaV1.Cagnotte
-typealias Versement = SchemaV1.Versement
+        var auteurId: String = ""
+        var creeLe: Date = Date.now
+        var modifieLe: Date = Date.now
+        var supprimeLe: Date?
+        var supprimePar: String?
+
+        init(type: TypeListe, titre: String, auteur: Membre, le date: Date) {
+            typeBrut = type.rawValue
+            self.titre = titre
+            auteurId = auteur.rawValue
+            creeLe = date
+            modifieLe = date
+        }
+    }
+}

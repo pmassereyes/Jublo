@@ -59,6 +59,39 @@ final class ParcoursListesTests: XCTestCase {
     }
 
     @MainActor
+    func testLaWishListSeSepareEntreLesDeux() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-baseEnMemoire", "-onglet", "listes", "-liste", "wishList", "-membreCourant", "pablo",
+            "-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR",
+        ]
+        app.launch()
+
+        // Mes envies
+        let mesEnvies = app.textFields["Ajouter à mes envies"]
+        XCTAssertTrue(mesEnvies.waitForExistence(timeout: 5))
+        mesEnvies.tap()
+        mesEnvies.typeText("Platine vinyle\n")
+        XCTAssertTrue(app.buttons["Platine vinyle"].waitForExistence(timeout: 2))
+
+        // Une idée pour Julie
+        app.buttons["Pour Julie"].tap()
+        let idee = app.textFields["Ajouter une idée pour Julie"]
+        XCTAssertTrue(idee.waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["Platine vinyle"].exists)
+        idee.tap()
+        idee.typeText("Cours de céramique\n")
+        XCTAssertTrue(app.buttons["Cours de céramique"].waitForExistence(timeout: 2))
+        capturer(app, "5-wishlist-julie")
+
+        // Retour à mes envies
+        app.buttons["Pour moi"].tap()
+        XCTAssertTrue(app.buttons["Platine vinyle"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.buttons["Cours de céramique"].exists)
+        capturer(app, "6-wishlist-moi")
+    }
+
+    @MainActor
     private func supprimer(_ ligne: XCUIElement, dans app: XCUIApplication) {
         ligne.swipeLeft()
         // Un balayage court révèle le bouton ; un balayage complet supprime directement.

@@ -66,6 +66,14 @@ struct LibellesTests {
         #expect(Libelles.qui(nil as String?, vuPar: .julie) == "quelqu'un")
     }
 
+    @Test func laWishListSeLitSelonQuiRegarde() {
+        #expect(Libelles.pour(.pablo, vuPar: .pablo) == "Pour moi")
+        #expect(Libelles.pour(.julie, vuPar: .pablo) == "Pour Julie")
+        #expect(Libelles.pour(.pablo, vuPar: .julie) == "Pour Pablo")
+        #expect(Libelles.ajoutEnvie(pour: .julie, vuPar: .julie) == "Ajouter à mes envies")
+        #expect(Libelles.ajoutEnvie(pour: .julie, vuPar: .pablo) == "Ajouter une idée pour Julie")
+    }
+
     @Test func unSouhaitSeLitSelonQuiRegarde() {
         #expect(Libelles.souhait(de: .julie, vuPar: .pablo) == "Julie aimerait que tu…")
         #expect(Libelles.souhait(de: .julie, vuPar: .julie) == "Ta demande à Pablo")

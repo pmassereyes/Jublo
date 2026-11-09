@@ -5,6 +5,8 @@ struct SelecteurPilules<Valeur: Hashable & Identifiable>: View {
     let options: [Valeur]
     @Binding var selection: Valeur
     let titre: (Valeur) -> String
+    /// Couleur de la pilule sélectionnée (par défaut, celle du texte).
+    var couleur: (Valeur) -> Color = { _ in Color.texte }
 
     @Namespace private var espace
 
@@ -24,7 +26,7 @@ struct SelecteurPilules<Valeur: Hashable & Identifiable>: View {
                         .background {
                             if choisie {
                                 Capsule()
-                                    .fill(Color.texte)
+                                    .fill(couleur(option))
                                     .matchedGeometryEffect(id: "selection", in: espace)
                             }
                         }
