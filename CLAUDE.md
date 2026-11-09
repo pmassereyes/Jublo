@@ -145,11 +145,18 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 - Phase 1 : chaque iPhone a sa propre base, sans synchronisation. Les données survivent aux
   mises à jour TestFlight grâce aux migrations du schéma.
 
+Envoi d'un build (depuis `main` propre et poussé ; l'envoi utilise le compte connecté dans
+Xcode, sans clé d'API) :
+
 ```sh
 xcodebuild -scheme Jublo -configuration Release -destination 'generic/platform=iOS' \
   -archivePath build/Jublo.xcarchive archive \
   CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD) -allowProvisioningUpdates
+xcodebuild -exportArchive -archivePath build/Jublo.xcarchive \
+  -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
 ```
+
+Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFlight.
 
 ## Conventions
 
