@@ -127,6 +127,27 @@ Arguments de lancement (debug uniquement) :
 Simulateurs installés : iOS 18.6 et iOS 27. Il n'y a pas de runtime iOS 17, donc on vérifie
 uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`).
 
+## Distribution (TestFlight)
+
+- Il faut le programme Apple Developer payant. Au 2026-11-09, Xcode ne connaît qu'une
+  Personal Team gratuite : `DEVELOPMENT_TEAM` n'est donc pas encore renseigné dans le projet.
+- Bundle identifier `com.pmassereyes.jublo`. Conteneur iCloud prévu en phase 2 :
+  `iCloud.com.pmassereyes.jublo`.
+- Numéro de build = nombre de commits de la branche archivée (`git rev-list --count HEAD`),
+  passé au moment de l'archivage. Version affichée : `MARKETING_VERSION`.
+- `ITSAppUsesNonExemptEncryption = NO` dans `Info.plist` (pas de chiffrement propre à l'app).
+- Icône : `AppIcon.png` (1024 px, sans transparence). Deux cercles, Pablo et Julie.
+- Testeurs : test interne (Julie est utilisatrice de l'App Store Connect de Pablo), donc pas
+  de revue Apple.
+- Phase 1 : chaque iPhone a sa propre base, sans synchronisation. Les données survivent aux
+  mises à jour TestFlight grâce aux migrations du schéma.
+
+```sh
+xcodebuild -scheme Jublo -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath build/Jublo.xcarchive archive \
+  CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD) -allowProvisioningUpdates
+```
+
 ## Conventions
 
 - Code, noms et commentaires en français, comme le reste du projet.
