@@ -51,3 +51,11 @@ extension ElementListe: Suppressible {
     var libelleType: String { type.titre }
     var titreAffiche: String { titre }
 }
+
+extension ElementListe {
+    /// Éléments d'une liste qui ne sont pas dans la corbeille.
+    static func actifs(dans type: TypeListe) -> Predicate<ElementListe> {
+        let brut = type.rawValue
+        return #Predicate { $0.typeBrut == brut && $0.supprimeLe == nil }
+    }
+}

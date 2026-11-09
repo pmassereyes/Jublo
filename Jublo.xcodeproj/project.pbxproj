@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		7A10000000000000000000F1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7A10000000000000000000A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 7A10000000000000000000D1;
+			remoteInfo = Jublo;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		7A10000000000000000000B1 /* Jublo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jublo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A10000000000000000000B2 /* JubloTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JubloTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -29,10 +40,22 @@
 			path = Jublo;
 			sourceTree = "<group>";
 		};
+		7A10000000000000000000C2 /* JubloTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JubloTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		7A10000000000000000000E2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A10000000000000000000E5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				7A10000000000000000000C1 /* Jublo */,
+				7A10000000000000000000C2 /* JubloTests */,
 				7A10000000000000000000A3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +78,7 @@
 			isa = PBXGroup;
 			children = (
 				7A10000000000000000000B1 /* Jublo.app */,
+				7A10000000000000000000B2 /* JubloTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +108,29 @@
 			productReference = 7A10000000000000000000B1 /* Jublo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		7A10000000000000000000D2 /* JubloTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A1000000000000000000203 /* Build configuration list for PBXNativeTarget "JubloTests" */;
+			buildPhases = (
+				7A10000000000000000000E4 /* Sources */,
+				7A10000000000000000000E5 /* Frameworks */,
+				7A10000000000000000000E6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7A10000000000000000000F2 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7A10000000000000000000C2 /* JubloTests */,
+			);
+			name = JubloTests;
+			packageProductDependencies = (
+			);
+			productName = JubloTests;
+			productReference = 7A10000000000000000000B2 /* JubloTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +143,10 @@
 				TargetAttributes = {
 					7A10000000000000000000D1 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					7A10000000000000000000D2 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 7A10000000000000000000D1;
 					};
 				};
 			};
@@ -113,12 +165,20 @@
 			projectRoot = "";
 			targets = (
 				7A10000000000000000000D1 /* Jublo */,
+				7A10000000000000000000D2 /* JubloTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		7A10000000000000000000E3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7A10000000000000000000E6 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -135,7 +195,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		7A10000000000000000000E4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7A10000000000000000000F2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 7A10000000000000000000D1 /* Jublo */;
+			targetProxy = 7A10000000000000000000F1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		7A1000000000000000000101 /* Debug */ = {
@@ -247,6 +322,38 @@
 			};
 			name = Release;
 		};
+		7A1000000000000000000105 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pmassereyes.jubloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jublo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Jublo";
+			};
+			name = Debug;
+		};
+		7A1000000000000000000106 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.pmassereyes.jubloTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Jublo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Jublo";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -264,6 +371,15 @@
 			buildConfigurations = (
 				7A1000000000000000000103 /* Debug */,
 				7A1000000000000000000104 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A1000000000000000000203 /* Build configuration list for PBXNativeTarget "JubloTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A1000000000000000000105 /* Debug */,
+				7A1000000000000000000106 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
