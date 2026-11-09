@@ -123,5 +123,5 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 
 - Code, noms et commentaires en français, comme le reste du projet.
 - Petits commits, un par étape, avec un message clair en français.
-- Dépôt : `git@github.com:pmassereyes/jublo.git`, branche `main`. Le travail se fait sur une
+- Dépôt : `git@github.com:pmassereyes/Jublo.git`, branche `main`. Le travail se fait sur une
   branche de phase (`phase-1`…), fusionnée dans `main` à la fin.
