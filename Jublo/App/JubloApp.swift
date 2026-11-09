@@ -10,8 +10,14 @@ struct JubloApp: App {
     init() {
         Apparence.appliquer()
         let conteneur: ModelContainer
+        #if DEBUG
+        // `-baseEnMemoire` : base vierge à chaque lancement (tests d'interface).
+        let enMemoire = CommandLine.arguments.contains("-baseEnMemoire")
+        #else
+        let enMemoire = false
+        #endif
         do {
-            conteneur = try Persistance.conteneur()
+            conteneur = try Persistance.conteneur(enMemoire: enMemoire)
         } catch {
             fatalError("Impossible d'ouvrir la base locale : \(error)")
         }

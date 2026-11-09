@@ -39,6 +39,17 @@
                ReferencedContainer = "container:Jublo.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "7A10000000000000000000D3"
+               BuildableName = "JubloUITests.xctest"
+               BlueprintName = "JubloUITests"
+               ReferencedContainer = "container:Jublo.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
