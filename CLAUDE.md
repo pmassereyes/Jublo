@@ -1,0 +1,112 @@
+# Jublo
+
+App iPhone partagée par un couple (Pablo et Julie) : pense-bête, courses, wish list, agenda,
+cagnotte, vacances envisagées, sorties à tester, compteur de retards, « ce mois-ci, j'aimerais
+que tu… », corbeille, puis un assistant IA local.
+
+## Feuille de route
+
+- **Phase 1 (en cours)** : app locale, SwiftData, Listes et Corbeille fonctionnelles, autres
+  onglets avec données d'exemple.
+- **Phase 2** : synchronisation CloudKit entre les deux identifiants Apple via **CKSyncEngine**
+  et une zone partagée en entier (CKShare de zone).
+- **Phase 3** : assistant IA. Passerelle FastAPI sur un PC Windows, jointe via Tailscale,
+  avec Ollama et un modèle d'environ 3B.
+
+## Décisions d'architecture
+
+- SwiftUI, **iOS 17 minimum**, Swift 6, offline-first, iPhone uniquement.
+- **Aucune donnée privée** : tout est partagé entre les deux membres.
+- **Persistance : SwiftData + CKSyncEngine (phase 2).** SwiftData ne sait pas synchroniser une
+  base CloudKit partagée : même dans le SDK iOS 27, `ModelConfiguration.CloudKitDatabase` ne
+  propose que `.automatic`, `.none` et `.private`. NSPersistentCloudKitContainer a été écarté.
+  Il impose deux stores (privé et partagé), un rangement manuel de chaque nouvel objet, et ses
+  écritures côté participant sont réputées fragiles. Julie écrit autant que Pablo.
+- **Pas de dépendance externe** (SPM, CocoaPods, outils de génération) sans l'accord de Pablo.
+  Le projet Xcode utilise des dossiers synchronisés : ajouter un fichier dans un dossier suffit.
+
+### Invariants de la phase 1 qui préparent la phase 2
+
+Ne pas les casser :
+
+1. `cloudKitDatabase: .none` dans `Persistance`. Avec `.automatic`, SwiftData activerait son
+   miroir privé dès l'ajout du droit iCloud, en conflit avec CKSyncEngine.
+2. **Toutes les écritures passent par `Depot`**. En phase 2, c'est là qu'on signalera les
+   changements à CKSyncEngine. Les vues ne modifient jamais un modèle directement.
+3. Chaque modèle a un `id: UUID` stable, futur nom d'enregistrement CloudKit.
+4. Contraintes compatibles CloudKit : toutes les propriétés sont optionnelles ou ont une valeur
+   par défaut, aucun `@Attribute(.unique)`, relations optionnelles.
+5. Schéma versionné : les modèles sont déclarés dans `SchemaV1`, et `PlanMigrationJublo` liste
+   les versions. Toute évolution du schéma passe par une nouvelle version.
+6. Montants en centimes (`Int`), énumérations stockées en `String` (`typeBrut`).
+
+## Modèles
+
+- Chaque élément porte `auteurId`, `creeLe`, `modifieLe`, `supprimeLe: Date?` et
+  `supprimePar: String?`. C'est le protocole `Suppressible`.
+- **Suppression douce** : `Depot.supprimer` remplit `supprimeLe` et `supprimePar`, et
+  `Depot.restaurer` les remet à `nil`. Au lancement, `Depot.purger()` supprime définitivement
+  les éléments supprimés depuis plus de 30 jours.
+- **Un nouveau type `Suppressible` doit être ajouté à `Depot.elementsDansLaCorbeille()`** et à
+  la `CorbeilleView`, sinon il n'est ni affiché ni purgé.
+- **Versements de la cagnotte** : ils ne sont pas `Suppressible` et ne sont **jamais purgés**.
+  Une annulation remplit `annuleLe` et `annulePar`, le versement reste dans l'historique et est
+  exclu du solde. Une cagnotte supprimée qui a des versements n'est jamais purgée
+  (`estPurgeable`).
+- `Membre` (`pablo` / `julie`) est une énumération. `auteurId` stocke sa valeur brute.
+
+## Libellés
+
+Jamais « toi » ni « elle » en dur. Tout libellé qui désigne une personne passe par
+`Libelles` et dépend du membre courant (`Identite`). On affiche « toi » ou le prénom de
+l'autre. En phase 1, le membre courant se choisit dans Nous › Debug. En phase 2, il sera
+déduit de l'identité iCloud.
+
+## Design system
+
+- Couleurs dans `Ressources/Assets.xcassets`, chacune avec une variante sombre. On les
+  utilise via les symboles générés (`Color.fond`, `.surface`, `.texte`, `.texteSecondaire`,
+  `.separateur`, `.pablo`, `.pabloDoux`, `.julie`, `.julieDoux`, `.commun`).
+  Valeurs claires : fond #F4F4F7, surface #FFFFFF, texte #1C1B29, texte secondaire #5E5F6E,
+  séparateurs #E3E4EA, Pablo #C2461F / #FBE9E2, Julie #1F6B62 / #E2F1EE,
+  contour des éléments communs #1C1B29.
+- Polices embarquées dans `DesignSystem/Polices` (licence OFL) : Bricolage Grotesque pour
+  les titres, DM Sans pour le texte. On les utilise via `Font.jublo…` (`Typographie.swift`),
+  qui suivent la taille de texte choisie dans iOS.
+- Cartes arrondies à 20 pt, boutons en pilule, zones tactiles d'au moins 44 pt
+  (`Mesures`).
+
+## Structure
+
+```
+Jublo/
+├── App/             point d'entrée, TabView racine
+├── Core/            Modeles/, Persistance/, Identite/ (aucune vue)
+├── DesignSystem/    couleurs, typographie, composants réutilisables, polices
+├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
+│                    Corbeille, Assistant)
+└── Ressources/      asset catalog
+JubloTests/          Swift Testing, base en mémoire, horloge injectée
+```
+
+Navigation : TabView à 5 onglets (Accueil, Listes, Agenda, Projets, Nous). L'assistant et la
+corbeille sont des écrans poussés.
+
+## Commandes
+
+```sh
+# Compiler
+xcodebuild -scheme Jublo -destination 'platform=iOS Simulator,name=iPhone 17' build
+# Tests
+xcodebuild -scheme Jublo -destination 'platform=iOS Simulator,name=iPhone 17' test
+```
+
+Simulateurs installés : iOS 18.6 et iOS 27. Il n'y a pas de runtime iOS 17, donc on vérifie
+uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`).
+
+## Conventions
+
+- Code, noms et commentaires en français, comme le reste du projet.
+- Petits commits, un par étape, avec un message clair en français.
+- Dépôt : `git@github.com:pmassereyes/jublo.git`, branche `main`. Le travail se fait sur une
+  branche de phase (`phase-1`…), fusionnée dans `main` à la fin.
