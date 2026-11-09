@@ -129,14 +129,16 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 
 ## Distribution (TestFlight)
 
-- Il faut le programme Apple Developer payant. Au 2026-11-09, Xcode ne connaît qu'une
-  Personal Team gratuite : `DEVELOPMENT_TEAM` n'est donc pas encore renseigné dans le projet.
+- Équipe `9DYNMC2YQK` (Pablo Masse-Reyes, individuelle, programme payant), signature
+  automatique. Le projet est désormais modifié aussi par Xcode : `project.pbxproj` est la
+  référence.
 - Bundle identifier `com.pmassereyes.jublo`, **définitif** (validé par Pablo le 2026-11-09).
   Ne pas le changer. Conteneur iCloud prévu en phase 2 :
   `iCloud.com.pmassereyes.jublo`.
 - Numéro de build = nombre de commits de la branche archivée (`git rev-list --count HEAD`),
   passé au moment de l'archivage. Version affichée : `MARKETING_VERSION`.
-- `ITSAppUsesNonExemptEncryption = NO` dans `Info.plist` (pas de chiffrement propre à l'app).
+- Réglage de build `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` (pas de chiffrement
+  propre à l'app).
 - Icône : `AppIcon.png` (1024 px, sans transparence). Deux cercles, Pablo et Julie.
 - Testeurs : test interne (Julie est utilisatrice de l'App Store Connect de Pablo), donc pas
   de revue Apple.
