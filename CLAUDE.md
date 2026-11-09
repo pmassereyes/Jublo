@@ -131,7 +131,8 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 
 - Il faut le programme Apple Developer payant. Au 2026-11-09, Xcode ne connaît qu'une
   Personal Team gratuite : `DEVELOPMENT_TEAM` n'est donc pas encore renseigné dans le projet.
-- Bundle identifier `com.pmassereyes.jublo`. Conteneur iCloud prévu en phase 2 :
+- Bundle identifier `com.pmassereyes.jublo`, **définitif** (validé par Pablo le 2026-11-09).
+  Ne pas le changer. Conteneur iCloud prévu en phase 2 :
   `iCloud.com.pmassereyes.jublo`.
 - Numéro de build = nombre de commits de la branche archivée (`git rev-list --count HEAD`),
   passé au moment de l'archivage. Version affichée : `MARKETING_VERSION`.
