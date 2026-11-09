@@ -24,6 +24,8 @@ que tu… », corbeille, puis un assistant IA local.
   écritures côté participant sont réputées fragiles. Julie écrit autant que Pablo.
 - **Pas de dépendance externe** (SPM, CocoaPods, outils de génération) sans l'accord de Pablo.
   Le projet Xcode utilise des dossiers synchronisés : ajouter un fichier dans un dossier suffit.
+  Seule exception déclarée dans le projet : `Jublo/Info.plist` (qui liste les polices) est
+  exclu de la copie des ressources.
 
 ### Invariants de la phase 1 qui préparent la phase 2
 
@@ -86,7 +88,8 @@ Jublo/
 ├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
 │                    Corbeille, Assistant)
 └── Ressources/      asset catalog
-JubloTests/          Swift Testing, base en mémoire, horloge injectée
+JubloTests/          Swift Testing, base en mémoire, horloge injectée (`Banc`)
+JubloUITests/        XCUITest : parcours Listes → corbeille sur base vierge
 ```
 
 Navigation : TabView à 5 onglets (Accueil, Listes, Agenda, Projets, Nous). L'assistant et la
@@ -97,9 +100,21 @@ corbeille sont des écrans poussés.
 ```sh
 # Compiler
 xcodebuild -scheme Jublo -destination 'platform=iOS Simulator,name=iPhone 17' build
-# Tests
+# Tous les tests (unitaires + interface)
 xcodebuild -scheme Jublo -destination 'platform=iOS Simulator,name=iPhone 17' test
+# Tests unitaires seuls
+xcodebuild -scheme Jublo -destination 'platform=iOS Simulator,name=iPhone 17' test -only-testing:JubloTests
 ```
+
+Arguments de lancement (debug uniquement) :
+
+| Argument | Effet |
+|---|---|
+| `-exemples` | remplit une base vide avec `DonneesDebug` |
+| `-baseEnMemoire` | base vierge en mémoire (tests d'interface) |
+| `-onglet listes` | ouvre un onglet (`accueil`, `listes`, `agenda`, `projets`, `nous`) |
+| `-liste courses` | ouvre une liste (`penseBete`, `courses`, `wishList`) |
+| `-membreCourant julie` | choisit le membre courant (clé `UserDefaults` d'`Identite`) |
 
 Simulateurs installés : iOS 18.6 et iOS 27. Il n'y a pas de runtime iOS 17, donc on vérifie
 uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`).
@@ -108,5 +123,5 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 
 - Code, noms et commentaires en français, comme le reste du projet.
 - Petits commits, un par étape, avec un message clair en français.
-- Dépôt : `git@github.com:pmassereyes/jublo.git`, branche `main`. Le travail se fait sur une
+- Dépôt : `git@github.com:pmassereyes/Jublo.git`, branche `main`. Le travail se fait sur une
   branche de phase (`phase-1`…), fusionnée dans `main` à la fin.
