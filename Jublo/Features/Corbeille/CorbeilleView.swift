@@ -79,7 +79,7 @@ private struct LigneCorbeille: View {
     var body: some View {
         HStack(spacing: Mesures.espacement) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(entree.element.libelleType)
+                Text(etiquette)
                     .font(.jubloLegende)
                     .foregroundStyle(.texteSecondaire)
                     .padding(.horizontal, 8)
@@ -101,6 +101,16 @@ private struct LigneCorbeille: View {
                 .buttonStyle(.pilule(.contour, compacte: true))
                 .accessibilityHint("Remet « \(entree.element.titreAffiche) » à sa place")
         }
+    }
+
+    /// Type de l'élément, précisé du destinataire pour la wish list (« Wish list · pour moi »).
+    private var etiquette: String {
+        if let element = entree.element as? ElementListe, element.type == .wishList,
+           let destinataire = element.destinataire {
+            let pour = Libelles.pour(destinataire, vuPar: identite.membre)
+            return "\(element.libelleType) · \(pour.prefix(1).lowercased())\(pour.dropFirst())"
+        }
+        return entree.element.libelleType
     }
 
     private var echeance: String {

@@ -2,11 +2,19 @@ import SwiftData
 import SwiftUI
 
 /// Pense-bête, courses et wish list : ajout, cochage, balayage vers la corbeille.
+/// La wish list se divise en deux : les envies du membre courant et celles de l'autre.
 struct ListesView: View {
+    /// Côté de la wish list affiché, relatif au membre courant.
+    enum Cote: CaseIterable, Identifiable {
+        case moi, autre
+        var id: Self { self }
+    }
+
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
 
     @State private var type = TypeListe.initial
+    @State private var cote = Cote.moi
     @State private var saisie = ""
     @State private var derniereSuppression: ElementListe?
     @FocusState private var saisieActive: Bool
@@ -15,13 +23,21 @@ struct ListesView: View {
         List {
             Section {
                 SelecteurPilules(options: TypeListe.allCases, selection: $type, titre: \.titre)
+                if type == .wishList {
+                    SelecteurPilules(options: Cote.allCases, selection: $cote) { cote in
+                        Libelles.pour(membre(cote), vuPar: identite.membre)
+                    } couleur: { cote in
+                        membre(cote).couleur
+                    }
+                    .overlay(Capsule().strokeBorder(Color.separateur))
+                }
                 champAjout
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 6, leading: Mesures.marge, bottom: 6, trailing: Mesures.marge))
 
-            ElementsDeListe(type: type) { element in
+            ElementsDeListe(filtre: filtre) { element in
                 depot.supprimer(element, par: identite.membre)
                 derniereSuppression = element
             }
@@ -49,7 +65,7 @@ struct ListesView: View {
 
     private var champAjout: some View {
         HStack(spacing: 8) {
-            TextField(type.invitationAjout, text: $saisie)
+            TextField(invitation, text: $saisie)
                 .font(.jubloCorps)
                 .foregroundStyle(.texte)
                 .submitLabel(.done)
@@ -67,9 +83,34 @@ struct ListesView: View {
         }
     }
 
+    private func membre(_ cote: Cote) -> Membre {
+        cote == .moi ? identite.membre : identite.membre.autre
+    }
+
+    /// Destinataire des envies affichées, quand la wish list est ouverte.
+    private var destinataire: Membre? {
+        type == .wishList ? membre(cote) : nil
+    }
+
+    private var filtre: Predicate<ElementListe> {
+        if let destinataire {
+            ElementListe.envies(pour: destinataire)
+        } else {
+            ElementListe.actifs(dans: type)
+        }
+    }
+
+    private var invitation: String {
+        if let destinataire {
+            Libelles.ajoutEnvie(pour: destinataire, vuPar: identite.membre)
+        } else {
+            type.invitationAjout
+        }
+    }
+
     private func ajouter() {
         withAnimation {
-            if depot.ajouter(saisie, a: type, par: identite.membre) != nil {
+            if depot.ajouter(saisie, a: type, par: identite.membre, pour: destinataire) != nil {
                 saisie = ""
             }
         }
@@ -80,17 +121,15 @@ struct ListesView: View {
 
 /// Éléments d'une liste, « à faire » puis « fait ».
 private struct ElementsDeListe: View {
-    let type: TypeListe
     let supprimer: (ElementListe) -> Void
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Query private var elements: [ElementListe]
 
-    init(type: TypeListe, supprimer: @escaping (ElementListe) -> Void) {
-        self.type = type
+    init(filtre: Predicate<ElementListe>, supprimer: @escaping (ElementListe) -> Void) {
         self.supprimer = supprimer
-        _elements = Query(filter: ElementListe.actifs(dans: type), sort: \.creeLe, order: .reverse)
+        _elements = Query(filter: filtre, sort: \.creeLe, order: .reverse)
     }
 
     var body: some View {

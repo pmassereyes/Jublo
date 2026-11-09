@@ -17,6 +17,16 @@ enum Libelles {
         membre == courant ? "Toi" : membre.prenom
     }
 
+    /// « Pour moi » / « Pour Julie » : à qui est destinée une envie de la wish list.
+    static func pour(_ membre: Membre, vuPar courant: Membre) -> String {
+        membre == courant ? "Pour moi" : "Pour \(membre.prenom)"
+    }
+
+    /// Invite du champ d'ajout de la wish list.
+    static func ajoutEnvie(pour membre: Membre, vuPar courant: Membre) -> String {
+        membre == courant ? "Ajouter à mes envies" : "Ajouter une idée pour \(membre.prenom)"
+    }
+
     /// Titre d'un souhait « ce mois-ci, j'aimerais que tu… » selon qui le lit.
     static func souhait(de auteur: Membre, vuPar courant: Membre) -> String {
         auteur == courant

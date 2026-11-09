@@ -24,6 +24,7 @@ enum DonneesDebug {
 
         depot(ilYA: 400).ajouter("Platine vinyle", a: .wishList, par: .pablo)
         depot(ilYA: 200).ajouter("Plaid en laine", a: .wishList, par: .julie)
+        depot(ilYA: 30).ajouter("Cours de céramique", a: .wishList, par: .pablo, pour: .julie)
 
         if let beurre = depot(ilYA: 100).ajouter("Beurre doux", a: .courses, par: .pablo) {
             depot(ilYA: 72).supprimer(beurre, par: .julie)
