@@ -68,7 +68,9 @@ struct LibellesTests {
 
     @Test func unSouhaitSeLitSelonQuiRegarde() {
         #expect(Libelles.souhait(de: .julie, vuPar: .pablo) == "Julie aimerait que tu…")
-        #expect(Libelles.souhait(de: .julie, vuPar: .julie) == "Tu aimerais que Pablo…")
+        #expect(Libelles.souhait(de: .julie, vuPar: .julie) == "Ta demande à Pablo")
+        #expect(Libelles.texteSouhait("cuisines.", de: .julie, vuPar: .pablo) == "…cuisines.")
+        #expect(Libelles.texteSouhait("cuisines.", de: .julie, vuPar: .julie) == "J'aimerais que tu cuisines.")
     }
 }
 

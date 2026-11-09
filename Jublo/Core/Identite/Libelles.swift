@@ -20,7 +20,12 @@ enum Libelles {
     /// Titre d'un souhait « ce mois-ci, j'aimerais que tu… » selon qui le lit.
     static func souhait(de auteur: Membre, vuPar courant: Membre) -> String {
         auteur == courant
-            ? "Tu aimerais que \(auteur.autre.prenom)…"
+            ? "Ta demande à \(auteur.autre.prenom)"
             : "\(auteur.prenom) aimerait que tu…"
+    }
+
+    /// Texte d'un souhait : cité tel quel pour son auteur, en suite de phrase pour l'autre.
+    static func texteSouhait(_ texte: String, de auteur: Membre, vuPar courant: Membre) -> String {
+        auteur == courant ? "J'aimerais que tu \(texte)" : "…\(texte)"
     }
 }

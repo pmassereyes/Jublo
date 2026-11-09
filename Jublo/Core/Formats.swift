@@ -15,6 +15,12 @@ enum Formats {
         )
     }
 
+    /// « Lundi 9 novembre » : seule la première lettre prend une majuscule.
+    static func jour(_ date: Date) -> String {
+        let texte = date.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(.jublo))
+        return texte.prefix(1).uppercased() + texte.dropFirst()
+    }
+
     /// « il y a 3 jours », « hier », « dans 2 semaines »…
     static func relatif(_ date: Date, maintenant: Date = .now) -> String {
         let formateur = RelativeDateTimeFormatter()
