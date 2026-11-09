@@ -10,9 +10,22 @@
 		7A10000000000000000000B1 /* Jublo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Jublo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7A10000000000000000000C3 /* Exceptions for "Jublo" folder in "Jublo" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 7A10000000000000000000D1 /* Jublo */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7A10000000000000000000C1 /* Jublo */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7A10000000000000000000C3 /* Exceptions for "Jublo" folder in "Jublo" target */,
+			);
 			path = Jublo;
 			sourceTree = "<group>";
 		};
@@ -189,6 +202,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Jublo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Jublo;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -215,6 +229,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Jublo/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Jublo;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
