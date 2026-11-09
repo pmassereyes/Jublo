@@ -16,6 +16,15 @@ enum TypeListe: String, CaseIterable, Identifiable {
         case .wishList: "Wish list"
         }
     }
+
+    /// Invite du champ d'ajout.
+    var invitationAjout: String {
+        switch self {
+        case .penseBete: "Ajouter au pense-bête"
+        case .courses: "Ajouter aux courses"
+        case .wishList: "Ajouter à la wish list"
+        }
+    }
 }
 
 extension SchemaV1 {
