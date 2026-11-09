@@ -26,6 +26,24 @@ struct NousView: View {
 
             MentionExemple()
 
+            NavigationLink {
+                CorbeilleView()
+            } label: {
+                Carte {
+                    HStack {
+                        Label("Corbeille", systemImage: "trash")
+                            .font(.jubloCorpsFort)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.texteSecondaire)
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(.texte)
+                    .frame(minHeight: Mesures.zoneTactile)
+                }
+            }
+            .buttonStyle(.plain)
+
             VStack(alignment: .leading, spacing: 8) {
                 TitreSection(titre: "Debug")
                 Carte {

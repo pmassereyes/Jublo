@@ -22,8 +22,11 @@ struct JubloApp: App {
             DonneesDebug.remplir(conteneur.mainContext)
         }
         #endif
+        let depot = Depot(contexte: conteneur.mainContext)
+        // Purge automatique de la corbeille au lancement (plus de 30 jours).
+        depot.purger()
         self.conteneur = conteneur
-        _depot = State(initialValue: Depot(contexte: conteneur.mainContext))
+        _depot = State(initialValue: depot)
     }
 
     var body: some Scene {

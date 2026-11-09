@@ -30,6 +30,16 @@ struct ListesView: View {
         .scrollContentBackground(.hidden)
         .background(.fond)
         .navigationTitle("Listes")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    CorbeilleView()
+                } label: {
+                    Image(systemName: "trash")
+                        .accessibilityLabel("Ouvrir la corbeille")
+                }
+            }
+        }
         .bandeauAnnuler($derniereSuppression) { element in
             "« \(element.titre) » mis à la corbeille"
         } annuler: { element in
@@ -91,7 +101,7 @@ private struct ElementsDeListe: View {
             ContentUnavailableView(
                 "Rien pour l'instant",
                 systemImage: "checklist",
-                description: Text("\(type.invitationAjout) avec le champ ci-dessus.")
+                description: Text("Ajoute un premier élément avec le champ ci-dessus.")
             )
             .font(.jubloCorps)
             .listRowBackground(Color.clear)
