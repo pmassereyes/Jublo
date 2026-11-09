@@ -27,7 +27,7 @@ enum TypeListe: String, CaseIterable, Identifiable {
     }
 }
 
-extension SchemaV1 {
+extension SchemaV2 {
     /// Élément d'une liste : pense-bête, courses ou wish list.
     @Model
     final class ElementListe {
@@ -38,6 +38,9 @@ extension SchemaV1 {
         var estCoche: Bool = false
         var cocheLe: Date?
         var cochePar: String?
+        /// Wish list seulement : membre à qui l'envie est destinée.
+        /// nil pour les autres listes, et pour les envies créées avant la V2 (voir `destinataire`).
+        var pourId: String?
 
         var auteurId: String = ""
         var creeLe: Date = Date.now
@@ -45,9 +48,11 @@ extension SchemaV1 {
         var supprimeLe: Date?
         var supprimePar: String?
 
-        init(type: TypeListe, titre: String, auteur: Membre, le date: Date) {
+        /// `pour` ne compte que pour la wish list ; par défaut, l'envie est celle de l'auteur.
+        init(type: TypeListe, titre: String, auteur: Membre, pour destinataire: Membre? = nil, le date: Date) {
             typeBrut = type.rawValue
             self.titre = titre
+            pourId = type == .wishList ? (destinataire ?? auteur).rawValue : nil
             auteurId = auteur.rawValue
             creeLe = date
             modifieLe = date
@@ -62,9 +67,25 @@ extension ElementListe: Suppressible {
 }
 
 extension ElementListe {
+    /// Membre à qui l'envie est destinée. Une envie sans destinataire est celle de son auteur.
+    var destinataire: Membre? {
+        pourId.flatMap(Membre.init(rawValue:)) ?? auteur
+    }
+
     /// Éléments d'une liste qui ne sont pas dans la corbeille.
     static func actifs(dans type: TypeListe) -> Predicate<ElementListe> {
         let brut = type.rawValue
         return #Predicate { $0.typeBrut == brut && $0.supprimeLe == nil }
+    }
+
+    /// Envies de la wish list destinées à `membre`, hors corbeille.
+    static func envies(pour membre: Membre) -> Predicate<ElementListe> {
+        let wishList = TypeListe.wishList.rawValue
+        let id: String? = membre.rawValue
+        let auteur = membre.rawValue
+        return #Predicate { element in
+            element.typeBrut == wishList && element.supprimeLe == nil
+                && (element.pourId == id || (element.pourId == nil && element.auteurId == auteur))
+        }
     }
 }

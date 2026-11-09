@@ -38,8 +38,12 @@ Ne pas les casser :
 3. Chaque modèle a un `id: UUID` stable, futur nom d'enregistrement CloudKit.
 4. Contraintes compatibles CloudKit : toutes les propriétés sont optionnelles ou ont une valeur
    par défaut, aucun `@Attribute(.unique)`, relations optionnelles.
-5. Schéma versionné : les modèles sont déclarés dans `SchemaV1`, et `PlanMigrationJublo` liste
-   les versions. Toute évolution du schéma passe par une nouvelle version.
+5. Schéma versionné. `SchemaActuel` désigne la version courante (aujourd'hui `SchemaV2`), et
+   `PlanMigrationJublo` liste les versions et les étapes de migration. Toute évolution passe
+   par une nouvelle version : on copie le modèle modifié dans `SchemaVn`, on fige l'ancien, et
+   on ajoute une étape et un test dans `MigrationTests`. Un modèle inchangé reste déclaré dans
+   la dernière version où il a changé (`Cagnotte` et `Versement` sont dans `SchemaV1`).
+   On ne modifie jamais une version publiée.
 6. Montants en centimes (`Int`), énumérations stockées en `String` (`typeBrut`).
 
 ## Modèles
@@ -56,6 +60,10 @@ Ne pas les casser :
   exclu du solde. Une cagnotte supprimée qui a des versements n'est jamais purgée
   (`estPurgeable`).
 - `Membre` (`pablo` / `julie`) est une énumération. `auteurId` stocke sa valeur brute.
+- **Wish list par membre** : chaque envie a un destinataire (`pourId`, depuis la V2). Par
+  défaut, c'est l'auteur ; on peut aussi noter une idée pour l'autre. Une envie sans
+  `pourId`, créée avant la V2, est celle de son auteur (`destinataire`,
+  `ElementListe.envies(pour:)`).
 
 ## Libellés
 
