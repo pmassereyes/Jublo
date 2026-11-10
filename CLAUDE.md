@@ -139,6 +139,10 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
   passé au moment de l'archivage. Version affichée : `MARKETING_VERSION`.
 - Réglage de build `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` (pas de chiffrement
   propre à l'app).
+- Manifeste de confidentialité `Ressources/PrivacyInfo.xcprivacy` : aucun suivi publicitaire,
+  aucune donnée collectée, et `UserDefaults` déclaré avec la raison `CA92.1`. Toute nouvelle
+  API à « raison requise » (horodatages de fichiers, espace disque, `systemUptime`…) doit y
+  être déclarée, sinon App Store Connect refuse le build.
 - Icône : `AppIcon.png` (1024 px, sans transparence). Deux cercles, Pablo et Julie.
 - Testeurs : test interne (Julie est utilisatrice de l'App Store Connect de Pablo), donc pas
   de revue Apple.
