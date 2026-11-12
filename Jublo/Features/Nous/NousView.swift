@@ -3,6 +3,7 @@ import SwiftUI
 struct NousView: View {
     @Environment(Identite.self) private var identite
     @Environment(Depot.self) private var depot
+    @Environment(ConfigurationAssistant.self) private var configurationAssistant
 
     var body: some View {
         @Bindable var identite = identite
@@ -25,6 +26,31 @@ struct NousView: View {
             }
 
             MentionExemple()
+
+            NavigationLink {
+                ReglagesAssistantView()
+            } label: {
+                Carte {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label("Assistant", systemImage: "sparkles")
+                                .font(.jubloCorpsFort)
+                            Text(configurationAssistant.manque == nil
+                                 ? "\(configurationAssistant.fournisseur.nom) · prêt"
+                                 : "À configurer")
+                                .font(.jubloLegende)
+                                .foregroundStyle(.texteSecondaire)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.texteSecondaire)
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(.texte)
+                    .frame(minHeight: Mesures.zoneTactile)
+                }
+            }
+            .buttonStyle(.plain)
 
             NavigationLink {
                 CorbeilleView()

@@ -6,6 +6,7 @@ struct JubloApp: App {
     private let conteneur: ModelContainer
     @State private var depot: Depot
     @State private var identite = Identite()
+    @State private var configurationAssistant: ConfigurationAssistant
 
     init() {
         Apparence.appliquer()
@@ -33,6 +34,13 @@ struct JubloApp: App {
         depot.purger()
         self.conteneur = conteneur
         _depot = State(initialValue: depot)
+        #if DEBUG
+        // `-assistantSimule` : l'assistant répond sans fournisseur (captures, tests d'interface).
+        let simulee = CommandLine.arguments.contains("-assistantSimule")
+        #else
+        let simulee = false
+        #endif
+        _configurationAssistant = State(initialValue: ConfigurationAssistant(simulee: simulee))
     }
 
     var body: some Scene {
@@ -40,6 +48,7 @@ struct JubloApp: App {
             RacineView()
                 .environment(depot)
                 .environment(identite)
+                .environment(configurationAssistant)
         }
         .modelContainer(conteneur)
     }

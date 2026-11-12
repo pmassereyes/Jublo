@@ -10,8 +10,11 @@ que tu… », corbeille, puis un assistant IA local.
   onglets avec données d'exemple.
 - **Phase 2** : synchronisation CloudKit entre les deux identifiants Apple via **CKSyncEngine**
   et une zone partagée en entier (CKShare de zone).
-- **Phase 3** : assistant IA. Passerelle FastAPI sur un PC Windows, jointe via Tailscale,
-  avec Ollama et un modèle d'environ 3B.
+- **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
+  via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
+  réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
+  passerelle FastAPI prévue au départ est abandonnée : Ollama parle déjà ce format. Prochaine
+  étape possible : proposer des ajouts aux listes.
 
 ## Décisions d'architecture
 
@@ -65,6 +68,24 @@ Ne pas les casser :
   `pourId`, créée avant la V2, est celle de son auteur (`destinataire`,
   `ElementListe.envies(pour:)`).
 
+## Assistant
+
+- `Core/Assistant/` : `ClientCompatibleOpenAI` (flux SSE, erreurs traduites en messages
+  clairs), `Fournisseur` (préréglages : adresse, modèle modifiable), `ConfigurationAssistant`
+  et `ContexteAssistant` (consignes envoyées avec chaque question : qui parle, date, listes hors
+  corbeille, 40 éléments au plus par section). `Features/Assistant/` : `Discussion` (en
+  mémoire, non partagée), `AssistantView`, `ReglagesAssistantView`.
+- Réglages **propres à chaque iPhone** : fournisseur, adresse et modèle dans `UserDefaults`.
+  La clé d'API est dans le trousseau, une par fournisseur, `ThisDeviceOnly`. Elle n'est
+  jamais dans le code ni dans le dépôt, et Pablo ne la communique pas à Claude.
+- HTTPS obligatoire, sauf `localhost` : pas d'exception ATS. Pour un modèle local, on passe
+  par `tailscale serve`.
+- L'écran prévient que les listes sont envoyées au fournisseur. Avant une publication sur
+  l'App Store, il faudra le déclarer dans la fiche de confidentialité et demander l'accord
+  de l'utilisateur (règle 5.1.2 d'Apple).
+- Toute donnée ajoutée au contexte (agenda, cagnotte…) passe par `ContexteAssistant` et ses
+  tests.
+
 ## Libellés
 
 Jamais « toi » ni « elle » en dur. Tout libellé qui désigne une personne passe par
@@ -91,7 +112,7 @@ déduit de l'identité iCloud.
 ```
 Jublo/
 ├── App/             point d'entrée, TabView racine
-├── Core/            Modeles/, Persistance/, Identite/ (aucune vue)
+├── Core/            Modeles/, Persistance/, Identite/, Assistant/ (aucune vue)
 ├── DesignSystem/    couleurs, typographie, composants réutilisables, polices
 ├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
 │                    Corbeille, Assistant)
@@ -123,6 +144,7 @@ Arguments de lancement (debug uniquement) :
 | `-onglet listes` | ouvre un onglet (`accueil`, `listes`, `agenda`, `projets`, `nous`) |
 | `-liste courses` | ouvre une liste (`penseBete`, `courses`, `wishList`) |
 | `-membreCourant julie` | choisit le membre courant (clé `UserDefaults` d'`Identite`) |
+| `-assistantSimule` | l'assistant répond sans fournisseur (`ServiceSimule`) |
 
 Simulateurs installés : iOS 18.6 et iOS 27. Il n'y a pas de runtime iOS 17, donc on vérifie
 uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`).
