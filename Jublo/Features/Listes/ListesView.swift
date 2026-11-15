@@ -12,6 +12,7 @@ struct ListesView: View {
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
+    @Environment(Synchronisation.self) private var synchronisation
 
     @State private var type = TypeListe.initial
     @State private var cote = Cote.moi
@@ -45,6 +46,7 @@ struct ListesView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(.fond)
+        .refreshable { await synchronisation.synchroniserMaintenant() }
         .navigationTitle("Listes")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

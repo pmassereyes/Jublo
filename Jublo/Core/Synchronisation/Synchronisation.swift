@@ -1,0 +1,488 @@
+import CloudKit
+import Foundation
+import Observation
+import OSLog
+import SwiftData
+
+/// Synchronisation CloudKit avec CKSyncEngine.
+///
+/// Toutes les données vivent dans une zone « Jublo ». Le propriétaire l'a dans sa base privée et
+/// la partage en entier (CKShare de zone) ; l'autre membre la voit dans sa base partagée.
+/// - Envoi : `Depot` signale chaque écriture (`ObservateurChangements`) et le moteur l'envoie.
+/// - Réception : `MiroirLocal` applique les changements ; la version modifiée en dernier l'emporte.
+@MainActor
+@Observable
+final class Synchronisation {
+    enum Role: Codable, Equatable {
+        /// La zone est dans ma base privée, partagée ou non.
+        case proprietaire
+        /// La zone appartient à l'autre membre et m'est partagée.
+        case participant(proprietaire: String)
+    }
+
+    enum Etat: Equatable {
+        case inactive(String)
+        case enCours
+        case aJour(Date)
+        case erreur(String)
+    }
+
+    enum EtatPartage: Equatable {
+        case aucun
+        case invitationEnvoyee
+        case actif
+        case participant
+    }
+
+    enum ErreurPartage: LocalizedError {
+        case pasProprietaire
+        case creation
+
+        var errorDescription: String? {
+            switch self {
+            case .pasProprietaire: "Seul celui qui a créé le partage peut inviter."
+            case .creation: "Le partage n'a pas pu être créé."
+            }
+        }
+    }
+
+    static let identifiantConteneur = "iCloud.com.pmassereyes.jublo"
+    static let nomZone = "Jublo"
+
+    /// Instance de l'app, pour accepter une invitation depuis le délégué de scène.
+    private(set) static weak var courante: Synchronisation?
+
+    private(set) var role: Role
+    private(set) var etat: Etat
+    /// Partage de la zone, côté propriétaire.
+    private(set) var partage: CKShare?
+    /// Faux dans les tests et les aperçus : aucun appel à iCloud.
+    let active: Bool
+
+    @ObservationIgnored private let miroir: MiroirLocal
+    @ObservationIgnored private let stockage: UserDefaults
+    @ObservationIgnored private var moteur: CKSyncEngine?
+    @ObservationIgnored private var demarrage: Task<Void, Never>?
+
+    private enum Cle {
+        static let role = "sync.role"
+        static let etatMoteur = "sync.etatMoteur"
+        static let enAttente = "sync.enAttente"
+    }
+
+    init(contexte: ModelContext, stockage: UserDefaults = .standard, active: Bool = true) {
+        miroir = MiroirLocal(contexte: contexte)
+        self.stockage = stockage
+        self.active = active
+        role = stockage.data(forKey: Cle.role).flatMap { try? JSONDecoder().decode(Role.self, from: $0) } ?? .proprietaire
+        etat = active ? .inactive("Connexion à iCloud…") : .inactive("Synchronisation désactivée.")
+        if active {
+            Self.courante = self
+        }
+    }
+
+    var conteneurCloudKit: CKContainer {
+        CKContainer(identifier: Self.identifiantConteneur)
+    }
+
+    var zone: CKRecordZone.ID {
+        switch role {
+        case .proprietaire:
+            CKRecordZone.ID(zoneName: Self.nomZone, ownerName: CKCurrentUserDefaultName)
+        case .participant(let proprietaire):
+            CKRecordZone.ID(zoneName: Self.nomZone, ownerName: proprietaire)
+        }
+    }
+
+    var etatPartage: EtatPartage {
+        if case .participant = role { return .participant }
+        guard let partage else { return .aucun }
+        let accepte = partage.participants.contains { $0.role != .owner && $0.acceptanceStatus == .accepted }
+        return accepte ? .actif : .invitationEnvoyee
+    }
+
+    // MARK: - Démarrage
+
+    /// Démarre la synchronisation si iCloud est disponible. Sans effet si elle tourne déjà.
+    func demarrer() async {
+        guard active, moteur == nil else { return }
+        if let demarrage {
+            await demarrage.value
+            return
+        }
+        let tache = Task { await lancerMoteur() }
+        demarrage = tache
+        await tache.value
+        demarrage = nil
+    }
+
+    /// Récupère puis envoie les changements (ouverture de l'app, tirer pour rafraîchir).
+    func synchroniserMaintenant() async {
+        guard active else { return }
+        guard let moteur else {
+            await demarrer()
+            return
+        }
+        do {
+            try await moteur.fetchChanges()
+            try await moteur.sendChanges()
+            etat = .aJour(.now)
+        } catch {
+            etat = .erreur(Self.message(error))
+        }
+    }
+
+    private func lancerMoteur() async {
+        let statut: CKAccountStatus
+        do {
+            statut = try await conteneurCloudKit.accountStatus()
+        } catch {
+            etat = .inactive("iCloud est injoignable pour le moment.")
+            return
+        }
+        guard statut == .available else {
+            etat = .inactive(statut == .noAccount
+                ? "Connecte-toi à iCloud dans Réglages pour synchroniser vos listes."
+                : "iCloud n'est pas disponible sur cet iPhone pour le moment.")
+            return
+        }
+
+        let etatSauve = lireEtatMoteur()
+        let base = role == .proprietaire ? conteneurCloudKit.privateCloudDatabase : conteneurCloudKit.sharedCloudDatabase
+        let moteur = CKSyncEngine(CKSyncEngine.Configuration(database: base, stateSerialization: etatSauve, delegate: self))
+        self.moteur = moteur
+        if etatSauve == nil {
+            // Premier démarrage dans cette zone : on la crée (propriétaire) et on envoie toute la base.
+            if role == .proprietaire {
+                moteur.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zone))])
+            }
+            moteur.state.add(pendingRecordZoneChanges: miroir.tousLesModeles().map { .saveRecord(identifiant($0.id)) })
+        }
+        rejouerChangementsEnAttente(moteur)
+        if role == .proprietaire {
+            partage = try? await conteneurCloudKit.privateCloudDatabase.record(for: identifiantPartage) as? CKShare
+        }
+        await synchroniserMaintenant()
+    }
+
+    // MARK: - Partage
+
+    /// Partage de la zone (propriétaire), créé au besoin.
+    func preparerPartage() async throws -> CKShare {
+        guard role == .proprietaire else { throw ErreurPartage.pasProprietaire }
+        if let partage { return partage }
+        let base = conteneurCloudKit.privateCloudDatabase
+        _ = try await base.modifyRecordZones(saving: [CKRecordZone(zoneID: zone)], deleting: [])
+        if let existant = try? await base.record(for: identifiantPartage) as? CKShare {
+            partage = existant
+            return existant
+        }
+        let nouveau = CKShare(recordZoneID: zone)
+        nouveau[CKShare.SystemFieldKey.title] = "Jublo"
+        nouveau.publicPermission = .none
+        let resultat = try await base.modifyRecords(saving: [nouveau], deleting: [])
+        guard let enregistre = try resultat.saveResults[nouveau.recordID]?.get() as? CKShare else {
+            throw ErreurPartage.creation
+        }
+        partage = enregistre
+        return enregistre
+    }
+
+    /// Partage modifié depuis la feuille de partage d'iOS (invitation, participants).
+    func partageMisAJour(_ partage: CKShare?) {
+        self.partage = partage
+    }
+
+    /// Accepte une invitation (lien ouvert sur l'iPhone de l'autre). Les données locales de cet
+    /// iPhone rejoignent la zone partagée ; les identifiants étant uniques, sans doublon.
+    func accepter(_ metadonnees: CKShare.Metadata) async {
+        guard active, metadonnees.participantRole != .owner else { return }
+        let zonePartagee = metadonnees.share.recordID.zoneID
+        guard zonePartagee.zoneName == Self.nomZone else {
+            etat = .erreur("Cette invitation ne concerne pas Jublo.")
+            return
+        }
+        do {
+            _ = try await conteneurCloudKit.accept(metadonnees)
+        } catch {
+            etat = .erreur("Impossible d'accepter l'invitation : \(Self.message(error))")
+            return
+        }
+        await reinitialiser(role: .participant(proprietaire: zonePartagee.ownerName))
+        await demarrer()
+    }
+
+    /// Quitte le partage (participant). Les listes restent sur cet iPhone, dans sa propre zone.
+    func quitterPartage() async throws {
+        guard case .participant = role else { return }
+        _ = try await conteneurCloudKit.sharedCloudDatabase.modifyRecordZones(saving: [], deleting: [zone])
+        await reinitialiser(role: .proprietaire)
+        await demarrer()
+    }
+
+    private var identifiantPartage: CKRecord.ID {
+        CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zone)
+    }
+
+    // MARK: - État
+
+    private func identifiant(_ id: UUID) -> CKRecord.ID {
+        CKRecord.ID(recordName: id.uuidString, zoneID: zone)
+    }
+
+    /// Repart de zéro pour un autre rôle ou un autre compte. Les données locales sont gardées.
+    private func reinitialiser(role nouveau: Role) async {
+        if let moteur {
+            await moteur.cancelOperations()
+        }
+        moteur = nil
+        stockage.removeObject(forKey: Cle.etatMoteur)
+        stockage.removeObject(forKey: Cle.enAttente)
+        miroir.oublierTout()
+        partage = nil
+        role = nouveau
+        stockage.set(try? JSONEncoder().encode(nouveau), forKey: Cle.role)
+    }
+
+    private func lireEtatMoteur() -> CKSyncEngine.State.Serialization? {
+        stockage.data(forKey: Cle.etatMoteur).flatMap {
+            try? JSONDecoder().decode(CKSyncEngine.State.Serialization.self, from: $0)
+        }
+    }
+
+    /// Changements faits pendant que le moteur ne tournait pas (iCloud indisponible).
+    private func rejouerChangementsEnAttente(_ moteur: CKSyncEngine) {
+        let enAttente = stockage.stringArray(forKey: Cle.enAttente) ?? []
+        guard !enAttente.isEmpty else { return }
+        let changements: [CKSyncEngine.PendingRecordZoneChange] = enAttente.compactMap { cle in
+            guard let id = UUID(uuidString: String(cle.dropFirst())) else { return nil }
+            return cle.hasPrefix("-") ? .deleteRecord(identifiant(id)) : .saveRecord(identifiant(id))
+        }
+        moteur.state.add(pendingRecordZoneChanges: changements)
+        stockage.removeObject(forKey: Cle.enAttente)
+    }
+
+    static func message(_ erreur: Error) -> String {
+        guard let erreur = erreur as? CKError else { return erreur.localizedDescription }
+        switch erreur.code {
+        case .notAuthenticated:
+            return "Connecte-toi à iCloud dans Réglages."
+        case .networkUnavailable, .networkFailure:
+            return "Pas de connexion : les changements partiront plus tard."
+        case .quotaExceeded:
+            return "Ton stockage iCloud est plein."
+        case .participantMayNeedVerification:
+            return "Ouvre l'invitation avec le compte iCloud qui l'a reçue."
+        case .badContainer, .missingEntitlement:
+            return "Le conteneur iCloud de l'app n'est pas configuré."
+        default:
+            return erreur.localizedDescription
+        }
+    }
+}
+
+// MARK: - Changements locaux
+
+extension Synchronisation: ObservateurChangements {
+    func aModifie(_ modele: any Synchronisable) {
+        signaler(.saveRecord(identifiant(modele.id)), cle: "+\(modele.id.uuidString)")
+    }
+
+    func aSupprime(_ modele: any Synchronisable) {
+        miroir.oublier(modele.id.uuidString)
+        signaler(.deleteRecord(identifiant(modele.id)), cle: "-\(modele.id.uuidString)")
+    }
+
+    private func signaler(_ changement: CKSyncEngine.PendingRecordZoneChange, cle: String) {
+        guard active else { return }
+        if let moteur {
+            moteur.state.add(pendingRecordZoneChanges: [changement])
+        } else {
+            stockage.set((stockage.stringArray(forKey: Cle.enAttente) ?? []) + [cle], forKey: Cle.enAttente)
+        }
+    }
+}
+
+// MARK: - CKSyncEngine
+
+extension Synchronisation: CKSyncEngineDelegate {
+    func handleEvent(_ evenement: CKSyncEngine.Event, syncEngine moteur: CKSyncEngine) async {
+        // Un moteur remplacé (changement de rôle ou de compte) peut encore parler : on l'ignore.
+        guard moteur === self.moteur else { return }
+        switch evenement {
+        case .stateUpdate(let miseAJour):
+            stockage.set(try? JSONEncoder().encode(miseAJour.stateSerialization), forKey: Cle.etatMoteur)
+        case .accountChange(let changement):
+            compteChange(changement)
+        case .fetchedDatabaseChanges(let changements):
+            zonesModifiees(changements, moteur: moteur)
+        case .fetchedRecordZoneChanges(let changements):
+            recus(changements, moteur: moteur)
+        case .sentRecordZoneChanges(let envoi):
+            envoyes(envoi, moteur: moteur)
+        case .willFetchChanges, .willSendChanges:
+            etat = .enCours
+        case .didFetchChanges, .didSendChanges:
+            if etat == .enCours {
+                etat = .aJour(.now)
+            }
+        case .sentDatabaseChanges, .willFetchRecordZoneChanges, .didFetchRecordZoneChanges:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    func nextRecordZoneChangeBatch(_ contexte: CKSyncEngine.SendChangesContext, syncEngine moteur: CKSyncEngine) async -> CKSyncEngine.RecordZoneChangeBatch? {
+        let changements = moteur.state.pendingRecordZoneChanges.filter { contexte.options.scope.contains($0) }
+        guard !changements.isEmpty else { return nil }
+        return await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: changements) { identifiant in
+            await self.enregistrement(pour: identifiant, moteur: moteur)
+        }
+    }
+
+    private func enregistrement(pour identifiant: CKRecord.ID, moteur: CKSyncEngine) -> CKRecord? {
+        guard let id = UUID(uuidString: identifiant.recordName), let modele = miroir.modele(id, type: nil) else {
+            moteur.state.remove(pendingRecordZoneChanges: [.saveRecord(identifiant)])
+            return nil
+        }
+        return miroir.enregistrement(pour: modele, zone: identifiant.zoneID)
+    }
+
+    private func recus(_ changements: CKSyncEngine.Event.FetchedRecordZoneChanges, moteur: CKSyncEngine) {
+        let enAttente = Set(moteur.state.pendingRecordZoneChanges.compactMap { changement -> String? in
+            if case .saveRecord(let identifiant) = changement { identifiant.recordName } else { nil }
+        })
+        let enregistrements = changements.modifications.map(\.record).filter { $0.recordID.zoneID.zoneName == Self.nomZone }
+        if role == .proprietaire, let nouveauPartage = enregistrements.lazy.compactMap({ $0 as? CKShare }).first {
+            partage = nouveauPartage
+        }
+        miroir.appliquer(enregistrements, enAttente: enAttente)
+
+        let suppressions = changements.deletions.filter { $0.recordID.zoneID.zoneName == Self.nomZone }
+        if suppressions.contains(where: { $0.recordType == CKRecord.SystemType.share }) {
+            partage = nil
+        }
+        miroir.supprimer(suppressions.map(\.recordID))
+    }
+
+    private func envoyes(_ envoi: CKSyncEngine.Event.SentRecordZoneChanges, moteur: CKSyncEngine) {
+        for enregistrement in envoi.savedRecords {
+            miroir.memoriser(enregistrement)
+        }
+        var aRenvoyer: [CKSyncEngine.PendingRecordZoneChange] = []
+        var zoneManquante = false
+        for echec in envoi.failedRecordSaves {
+            let identifiant = echec.record.recordID
+            switch echec.error.code {
+            case .serverRecordChanged:
+                if let serveur = echec.error.serverRecord, miroir.resoudreConflit(avec: serveur) {
+                    aRenvoyer.append(.saveRecord(identifiant))
+                }
+            case .zoneNotFound:
+                zoneManquante = true
+                miroir.oublier(identifiant.recordName)
+                aRenvoyer.append(.saveRecord(identifiant))
+            case .unknownItem:
+                // Effacé sur le serveur mais encore présent ici : on le recrée.
+                miroir.oublier(identifiant.recordName)
+                aRenvoyer.append(.saveRecord(identifiant))
+            case .quotaExceeded:
+                etat = .erreur("Ton stockage iCloud est plein : les changements ne partent plus.")
+            case .permissionFailure:
+                etat = .erreur("Le partage ne permet pas de modifier les listes.")
+            default:
+                // Réseau, iCloud occupé, limite de débit… : CKSyncEngine réessaie tout seul.
+                journal.info("Envoi reporté pour \(identifiant.recordName) : \(echec.error)")
+            }
+        }
+        miroir.enregistrer()
+        if zoneManquante {
+            guard role == .proprietaire else {
+                Task { await self.finDuPartage() }
+                return
+            }
+            moteur.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zone))])
+        }
+        moteur.state.add(pendingRecordZoneChanges: aRenvoyer)
+    }
+
+    private func zonesModifiees(_ changements: CKSyncEngine.Event.FetchedDatabaseChanges, moteur: CKSyncEngine) {
+        guard changements.deletions.contains(where: { $0.zoneID.zoneName == Self.nomZone }) else { return }
+        switch role {
+        case .proprietaire:
+            // Zone effacée (données iCloud réinitialisées) : les données locales font foi, on renvoie tout.
+            miroir.oublierTout()
+            partage = nil
+            moteur.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zone))])
+            moteur.state.add(pendingRecordZoneChanges: miroir.tousLesModeles().map { .saveRecord(identifiant($0.id)) })
+        case .participant:
+            Task { await self.finDuPartage() }
+        }
+    }
+
+    /// Le propriétaire a arrêté le partage : on garde une copie des listes, dans sa propre zone.
+    private func finDuPartage() async {
+        await reinitialiser(role: .proprietaire)
+        await demarrer()
+    }
+
+    private func compteChange(_ changement: CKSyncEngine.Event.AccountChange) {
+        switch changement.changeType {
+        case .signIn:
+            break
+        case .signOut, .switchAccounts:
+            // Autre compte (ou aucun) : on repart de zéro, en gardant les données locales.
+            Task {
+                await self.reinitialiser(role: .proprietaire)
+                await self.demarrer()
+            }
+        @unknown default:
+            break
+        }
+    }
+}
+
+// MARK: - Schéma (développement)
+
+#if DEBUG
+extension Synchronisation {
+    /// Enregistre chaque type avec tous ses champs remplis, dans une zone temporaire de
+    /// l'environnement de développement, puis l'efface. CloudKit ne crée un champ qu'à sa
+    /// première écriture : sans cela, le schéma déployé en production serait incomplet.
+    func preparerSchema() async throws {
+        let base = conteneurCloudKit.privateCloudDatabase
+        let zoneTemporaire = CKRecordZone(zoneName: "SchemaJublo")
+        _ = try await base.modifyRecordZones(saving: [zoneTemporaire], deleting: [])
+
+        let date = Date.now
+        let element = ElementListe(type: .wishList, titre: "Schéma", auteur: .pablo, pour: .julie, le: date)
+        element.estCoche = true
+        element.cocheLe = date
+        element.cochePar = Membre.julie.rawValue
+        element.supprimeLe = date
+        element.supprimePar = Membre.pablo.rawValue
+        let cagnotte = Cagnotte(nom: "Schéma", objectifCentimes: 100, auteur: .pablo, le: date)
+        cagnotte.supprimeLe = date
+        cagnotte.supprimePar = Membre.pablo.rawValue
+        let versement = Versement(montantCentimes: 100, note: "Schéma", auteur: .julie, le: date)
+        versement.annuleLe = date
+        versement.annulePar = Membre.julie.rawValue
+
+        let modeles: [any Synchronisable] = [element, cagnotte, versement]
+        let enregistrements = modeles.map { modele in
+            let enregistrement = CKRecord(
+                recordType: type(of: modele).typeEnregistrement,
+                recordID: CKRecord.ID(recordName: modele.id.uuidString, zoneID: zoneTemporaire.zoneID)
+            )
+            modele.remplir(enregistrement)
+            return enregistrement
+        }
+        enregistrements[2]["cagnotteId"] = cagnotte.id.uuidString
+        _ = try await base.modifyRecords(saving: enregistrements, deleting: [])
+        _ = try await base.modifyRecordZones(saving: [], deleting: [zoneTemporaire.zoneID])
+    }
+}
+#endif
+
+private let journal = Logger(subsystem: "com.pmassereyes.jublo", category: "Synchronisation")
