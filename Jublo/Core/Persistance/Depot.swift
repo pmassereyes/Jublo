@@ -2,10 +2,17 @@ import Foundation
 import OSLog
 import SwiftData
 
-/// Point d'entrée unique pour toutes les écritures.
+/// Reçoit chaque changement fait par `Depot`, pour l'envoyer à CloudKit (`Synchronisation`).
+@MainActor
+protocol ObservateurChangements: AnyObject {
+    func aModifie(_ modele: any Synchronisable)
+    func aSupprime(_ modele: any Synchronisable)
+}
+
+/// Point d'entrée unique pour toutes les écritures locales.
 ///
-/// Les vues lisent avec `@Query` mais ne modifient jamais un modèle elles-mêmes :
-/// en phase 2, c'est ici que chaque changement sera signalé à CKSyncEngine.
+/// Les vues lisent avec `@Query` mais ne modifient jamais un modèle elles-mêmes : chaque
+/// changement est signalé à `observateur`, qui l'envoie à CloudKit.
 @MainActor
 @Observable
 final class Depot {
@@ -14,6 +21,7 @@ final class Depot {
 
     let contexte: ModelContext
     private let horloge: () -> Date
+    @ObservationIgnored weak var observateur: (any ObservateurChangements)?
 
     init(contexte: ModelContext, horloge: @escaping () -> Date = { .now }) {
         self.contexte = contexte
@@ -31,6 +39,7 @@ final class Depot {
         let element = ElementListe(type: type, titre: titre, auteur: membre, pour: destinataire, le: horloge())
         contexte.insert(element)
         enregistrer()
+        observateur?.aModifie(element)
         return element
     }
 
@@ -42,6 +51,7 @@ final class Depot {
         element.cochePar = element.estCoche ? membre.rawValue : nil
         element.modifieLe = maintenant
         enregistrer()
+        observateur?.aModifie(element)
     }
 
     // MARK: - Cagnotte
@@ -51,6 +61,7 @@ final class Depot {
         let cagnotte = Cagnotte(nom: nom, objectifCentimes: objectifCentimes, auteur: membre, le: horloge())
         contexte.insert(cagnotte)
         enregistrer()
+        observateur?.aModifie(cagnotte)
         return cagnotte
     }
 
@@ -60,6 +71,7 @@ final class Depot {
         contexte.insert(versement)
         versement.cagnotte = cagnotte
         enregistrer()
+        observateur?.aModifie(versement)
         return versement
     }
 
@@ -71,6 +83,7 @@ final class Depot {
         versement.annulePar = membre.rawValue
         versement.modifieLe = maintenant
         enregistrer()
+        observateur?.aModifie(versement)
     }
 
     // MARK: - Corbeille
@@ -83,6 +96,7 @@ final class Depot {
         element.supprimePar = membre.rawValue
         element.modifieLe = maintenant
         enregistrer()
+        observateur?.aModifie(element)
     }
 
     /// Sort un élément de la corbeille.
@@ -92,6 +106,7 @@ final class Depot {
         element.supprimePar = nil
         element.modifieLe = horloge()
         enregistrer()
+        observateur?.aModifie(element)
     }
 
     /// Éléments de la corbeille, du plus récemment supprimé au plus ancien.
@@ -116,6 +131,7 @@ final class Depot {
             return supprimeLe < limite && element.estPurgeable
         }
         for element in aPurger {
+            observateur?.aSupprime(element)
             contexte.delete(element)
         }
         if !aPurger.isEmpty {
