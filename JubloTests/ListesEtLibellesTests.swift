@@ -89,8 +89,14 @@ struct IdentiteTests {
         let stockage = try #require(UserDefaults(suiteName: suite))
         defer { stockage.removePersistentDomain(forName: suite) }
 
-        #expect(Identite(stockage: stockage).membre == .pablo)
-        Identite(stockage: stockage).membre = .julie
-        #expect(Identite(stockage: stockage).membre == .julie)
+        let neuve = Identite(stockage: stockage)
+        #expect(neuve.membre == .pablo)
+        #expect(!neuve.estChoisi)
+
+        neuve.membre = .julie
+
+        let relue = Identite(stockage: stockage)
+        #expect(relue.membre == .julie)
+        #expect(relue.estChoisi)
     }
 }

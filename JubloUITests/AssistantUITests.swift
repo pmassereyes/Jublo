@@ -6,6 +6,7 @@ final class AssistantUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     private func lancer(_ arguments: [String]) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = arguments + [
@@ -17,6 +18,7 @@ final class AssistantUITests: XCTestCase {
         return app
     }
 
+    @MainActor
     private func texte(contenant fragment: String, dans app: XCUIApplication) -> XCUIElementQuery {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", fragment))
     }

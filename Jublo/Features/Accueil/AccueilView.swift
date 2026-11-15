@@ -26,18 +26,6 @@ struct AccueilView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                TitreSection(titre: "À venir", detail: "exemple")
-                ForEach(AgendaExemples.evenements().prefix(2)) { evenement in
-                    LigneEvenement(evenement: evenement)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                TitreSection(titre: "Cagnotte", detail: "exemple")
-                CarteCagnotte(cagnotte: ProjetsExemples.cagnotte, nombreVersements: 0)
-            }
-
             NavigationLink {
                 AssistantView()
             } label: {
