@@ -67,7 +67,7 @@ struct WishListTests {
 
 @MainActor
 struct MigrationTests {
-    @Test func uneBaseV1EstMigreeSansPerte() throws {
+    @Test func uneBaseV1EstMigreeJusquALaVersionCouranteSansPerte() throws {
         let dossier = FileManager.default.temporaryDirectory.appending(path: "jublo-migration-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dossier) }
@@ -99,5 +99,6 @@ struct MigrationTests {
         #expect(try contexte.fetch(FetchDescriptor(predicate: ElementListe.envies(pour: .julie))).map(\.titre) == ["Plaid"])
         let cagnottes = try contexte.fetch(FetchDescriptor<Cagnotte>())
         #expect(cagnottes.map(\.soldeCentimes) == [2_000])
+        #expect(try contexte.fetchCount(FetchDescriptor<MetadonneesSync>()) == 0)
     }
 }

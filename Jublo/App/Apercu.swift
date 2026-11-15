@@ -14,6 +14,7 @@ extension View {
             .modelContainer(conteneur)
             .environment(Depot(contexte: conteneur.mainContext))
             .environment(identite)
+            .environment(Synchronisation(contexte: conteneur.mainContext, active: false))
             .environment(ConfigurationAssistant(
                 stockage: UserDefaults(suiteName: "apercu")!, serviceTrousseau: "apercu", simulee: true
             ))

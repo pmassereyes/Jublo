@@ -3,11 +3,17 @@ import SwiftUI
 struct NousView: View {
     @Environment(Identite.self) private var identite
     @Environment(ConfigurationAssistant.self) private var configurationAssistant
+    #if DEBUG
+    @Environment(Synchronisation.self) private var synchronisation
+    @State private var messageSchema: String?
+    #endif
 
     var body: some View {
         @Bindable var identite = identite
 
         Page {
+            CartePartage()
+
             BientotDisponible(
                 titre: "Compteur de retards",
                 symbole: "clock",
@@ -79,6 +85,36 @@ struct NousView: View {
                     }
                 }
             }
+
+            #if DEBUG
+            VStack(alignment: .leading, spacing: 8) {
+                TitreSection(titre: "Développement")
+                Carte {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Crée tous les champs dans l'environnement CloudKit de développement, avant de déployer le schéma en production.")
+                            .font(.jubloLegende)
+                            .foregroundStyle(.texteSecondaire)
+                        Button("Préparer le schéma CloudKit") {
+                            messageSchema = "Préparation…"
+                            Task {
+                                do {
+                                    try await synchronisation.preparerSchema()
+                                    messageSchema = "Schéma prêt : déploie-le en production dans la console CloudKit."
+                                } catch {
+                                    messageSchema = Synchronisation.message(error)
+                                }
+                            }
+                        }
+                        .buttonStyle(.pilule(.contour, compacte: true))
+                        if let messageSchema {
+                            Text(messageSchema)
+                                .font(.jubloLegende)
+                                .foregroundStyle(.texte)
+                        }
+                    }
+                }
+            }
+            #endif
         }
         .navigationTitle("Nous")
     }

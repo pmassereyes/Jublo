@@ -3,7 +3,7 @@ import SwiftData
 
 /// Élément partagé supprimé « en douceur » : il passe par la corbeille avant d'être purgé
 /// (voir `Depot.supprimer`, `Depot.restaurer` et `Depot.purger`).
-protocol Suppressible: PersistentModel {
+protocol Suppressible: Synchronisable {
     var auteurId: String { get }
     var creeLe: Date { get }
     var modifieLe: Date { get set }

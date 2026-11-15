@@ -10,8 +10,9 @@ que tu… », corbeille, puis un assistant IA local.
   fonctionnalités affichent un état « Bientôt » (`BientotDisponible`) : **jamais de données
   d'exemple dans l'app** (Pablo n'en veut pas). `DonneesDebug` ne sert qu'aux aperçus et aux
   tests d'interface.
-- **Phase 2** : synchronisation CloudKit entre les deux identifiants Apple via **CKSyncEngine**
-  et une zone partagée en entier (CKShare de zone).
+- **Phase 2 (code fait en novembre 2026, à valider sur les deux iPhones)** : synchronisation
+  CloudKit entre les deux identifiants Apple via **CKSyncEngine** et une zone partagée en
+  entier (CKShare de zone). Voir la section Synchronisation.
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
   via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
   réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
@@ -38,8 +39,10 @@ Ne pas les casser :
 
 1. `cloudKitDatabase: .none` dans `Persistance`. Avec `.automatic`, SwiftData activerait son
    miroir privé dès l'ajout du droit iCloud, en conflit avec CKSyncEngine.
-2. **Toutes les écritures passent par `Depot`**. En phase 2, c'est là qu'on signalera les
-   changements à CKSyncEngine. Les vues ne modifient jamais un modèle directement.
+2. **Toutes les écritures locales passent par `Depot`**, qui les signale à `Synchronisation`
+   (`ObservateurChangements`). Les vues ne modifient jamais un modèle directement. Seule
+   exception : `MiroirLocal` applique les changements reçus de CloudKit, sans repasser par
+   `Depot`, pour ne pas les renvoyer.
 3. Chaque modèle a un `id: UUID` stable, futur nom d'enregistrement CloudKit.
 4. Contraintes compatibles CloudKit : toutes les propriétés sont optionnelles ou ont une valeur
    par défaut, aucun `@Attribute(.unique)`, relations optionnelles.
@@ -69,6 +72,37 @@ Ne pas les casser :
   défaut, c'est l'auteur ; on peut aussi noter une idée pour l'autre. Une envie sans
   `pourId`, créée avant la V2, est celle de son auteur (`destinataire`,
   `ElementListe.envies(pour:)`).
+
+## Synchronisation (CloudKit)
+
+- Conteneur `iCloud.com.pmassereyes.jublo` (créé, impossible à supprimer). Droits dans
+  `Jublo/Jublo.entitlements` : CloudKit et `aps-environment`. `Info.plist` contient
+  `CKSharingSupported` et le mode d'arrière-plan `remote-notification`.
+- Une zone « Jublo ». Le **propriétaire** l'a dans sa base privée et la partage en entier
+  (`CKShare(recordZoneID:)`, lecture-écriture). Le **participant** la voit dans sa base
+  partagée. Le rôle (`Synchronisation.Role`), l'état de CKSyncEngine et les changements
+  faits hors ligne sont dans `UserDefaults` (`sync.*`).
+- Enregistrements : le nom est l'`id` (UUID) du modèle, le type est le nom du modèle. Les
+  textes personnels (titres, noms, notes) sont dans `encryptedValues`. Les champs système
+  sont gardés dans `MetadonneesSync`, propres à chaque appareil.
+- Conflits : la version au `modifieLe` le plus récent l'emporte. En rejoignant un partage,
+  les données locales du participant sont envoyées dans la zone ; les identifiants étant
+  uniques, il n'y a pas de doublon. Quand le partage prend fin, chacun garde une copie
+  locale.
+- Invitation : Nous › Partage › « Inviter Julie », via la feuille de partage d'iOS. Le lien
+  ouvre Jublo, puis `DelegueScene` appelle `Synchronisation.accepter`.
+- **Ajouter un modèle synchronisé** : le rendre `Synchronisable`, l'ajouter à `MiroirLocal`
+  (`typesEnregistrement`, `fabriquer`, `modele`, `tousLesModeles`) et à `preparerSchema`,
+  puis **redéployer le schéma en production avant tout build TestFlight**. La production
+  refuse les champs et les types inconnus.
+- Environnements : un build debug lancé depuis Xcode utilise l'environnement CloudKit de
+  **développement**, TestFlight celui de **production**. Leurs données ne se croisent pas :
+  pour tester le partage, les deux iPhones doivent être sur TestFlight.
+- Déployer le schéma : lancer un build debug sur un iPhone connecté à iCloud, puis
+  Nous › Développement › « Préparer le schéma CloudKit ». Ensuite, dans la console CloudKit
+  (icloud.developer.apple.com), conteneur Jublo › Schema › « Deploy Schema Changes ».
+- Tests : aucun appel à iCloud (`Synchronisation(active: false)` avec `-baseEnMemoire` ou
+  dans l'app hôte des tests unitaires). Le partage réel se teste sur les deux iPhones.
 
 ## Assistant
 
@@ -115,7 +149,7 @@ iCloud.
 ```
 Jublo/
 ├── App/             point d'entrée, TabView racine
-├── Core/            Modeles/, Persistance/, Identite/, Assistant/ (aucune vue)
+├── Core/            Modeles/, Persistance/, Identite/, Assistant/, Synchronisation/ (aucune vue)
 ├── DesignSystem/    couleurs, typographie, composants réutilisables, polices
 ├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
 │                    Corbeille, Assistant)
@@ -171,8 +205,9 @@ uniquement que le code compile pour iOS 17 (pas d'API iOS 18+ sans `#available`)
 - Icône : `AppIcon.png` (1024 px, sans transparence). Deux cercles, Pablo et Julie.
 - Testeurs : test interne (Julie est utilisatrice de l'App Store Connect de Pablo), donc pas
   de revue Apple.
-- Phase 1 : chaque iPhone a sa propre base, sans synchronisation. Les données survivent aux
-  mises à jour TestFlight grâce aux migrations du schéma.
+- Chaque iPhone garde sa base locale, synchronisée par CloudKit. Les données survivent aux
+  mises à jour TestFlight grâce aux migrations du schéma. Si un build ajoute des champs
+  CloudKit, il faut déployer le schéma en production **avant** de l'envoyer.
 
 Envoi d'un build (depuis `main` propre et poussé ; l'envoi utilise le compte connecté dans
 Xcode, sans clé d'API) :

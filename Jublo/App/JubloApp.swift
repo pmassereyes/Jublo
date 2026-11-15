@@ -3,10 +3,14 @@ import SwiftUI
 
 @main
 struct JubloApp: App {
+    @UIApplicationDelegateAdaptor(DelegueApplication.self) private var delegueApplication
+    @Environment(\.scenePhase) private var phase
+
     private let conteneur: ModelContainer
     @State private var depot: Depot
     @State private var identite = Identite()
     @State private var configurationAssistant: ConfigurationAssistant
+    @State private var synchronisation: Synchronisation
 
     init() {
         Apparence.appliquer()
@@ -32,8 +36,13 @@ struct JubloApp: App {
         let depot = Depot(contexte: conteneur.mainContext)
         // Purge automatique de la corbeille au lancement (plus de 30 jours).
         depot.purger()
+        // Pas d'iCloud pendant les tests (base en mémoire, ou app hôte des tests unitaires).
+        let sansSynchronisation = enMemoire || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let synchronisation = Synchronisation(contexte: conteneur.mainContext, active: !sansSynchronisation)
+        depot.observateur = synchronisation
         self.conteneur = conteneur
         _depot = State(initialValue: depot)
+        _synchronisation = State(initialValue: synchronisation)
         #if DEBUG
         // `-assistantSimule` : l'assistant répond sans fournisseur (captures, tests d'interface).
         let simulee = CommandLine.arguments.contains("-assistantSimule")
@@ -49,6 +58,13 @@ struct JubloApp: App {
                 .environment(depot)
                 .environment(identite)
                 .environment(configurationAssistant)
+                .environment(synchronisation)
+                .task { await synchronisation.demarrer() }
+                .onChange(of: phase) {
+                    if phase == .active {
+                        Task { await synchronisation.synchroniserMaintenant() }
+                    }
+                }
         }
         .modelContainer(conteneur)
     }
