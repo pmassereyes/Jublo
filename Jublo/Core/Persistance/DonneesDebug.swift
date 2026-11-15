@@ -2,7 +2,8 @@
 import Foundation
 import SwiftData
 
-/// Données d'exemple pour les aperçus et le réglage Nous › Debug.
+/// Données d'exemple pour les aperçus Xcode et les tests d'interface (`-exemples`).
+/// Jamais visibles dans l'app elle-même.
 @MainActor
 enum DonneesDebug {
     static func remplir(_ contexte: ModelContext, maintenant: Date = .now) {

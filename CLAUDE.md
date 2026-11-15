@@ -6,8 +6,10 @@ que tu… », corbeille, puis un assistant IA local.
 
 ## Feuille de route
 
-- **Phase 1 (en cours)** : app locale, SwiftData, Listes et Corbeille fonctionnelles, autres
-  onglets avec données d'exemple.
+- **Phase 1 (faite)** : app locale, SwiftData, Listes et Corbeille fonctionnelles. Les autres
+  fonctionnalités affichent un état « Bientôt » (`BientotDisponible`) : **jamais de données
+  d'exemple dans l'app** (Pablo n'en veut pas). `DonneesDebug` ne sert qu'aux aperçus et aux
+  tests d'interface.
 - **Phase 2** : synchronisation CloudKit entre les deux identifiants Apple via **CKSyncEngine**
   et une zone partagée en entier (CKShare de zone).
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
@@ -90,8 +92,9 @@ Ne pas les casser :
 
 Jamais « toi » ni « elle » en dur. Tout libellé qui désigne une personne passe par
 `Libelles` et dépend du membre courant (`Identite`). On affiche « toi » ou le prénom de
-l'autre. En phase 1, le membre courant se choisit dans Nous › Debug. En phase 2, il sera
-déduit de l'identité iCloud.
+l'autre. Le membre courant est choisi au premier lancement (`ChoixMembreView`), puis
+modifiable dans Nous › Cet iPhone. Il reste un choix explicite, indépendant du compte
+iCloud.
 
 ## Design system
 

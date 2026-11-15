@@ -6,6 +6,7 @@ struct RacineView: View {
         case accueil, listes, agenda, projets, nous
     }
 
+    @Environment(Identite.self) private var identite
     @State private var onglet = Onglet.initial
 
     var body: some View {
@@ -27,6 +28,10 @@ struct RacineView: View {
                 .tag(Onglet.nous)
         }
         .tint(.texte)
+        .fullScreenCover(isPresented: .constant(!identite.estChoisi)) {
+            ChoixMembreView()
+                .environment(identite)
+        }
     }
 }
 
