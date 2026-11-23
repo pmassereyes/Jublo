@@ -34,12 +34,13 @@ struct JubloApp: App {
         }
         #endif
         let depot = Depot(contexte: conteneur.mainContext)
-        // Purge automatique de la corbeille au lancement (plus de 30 jours).
-        depot.purger()
         // Pas d'iCloud pendant les tests (base en mémoire, ou app hôte des tests unitaires).
         let sansSynchronisation = enMemoire || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let synchronisation = Synchronisation(contexte: conteneur.mainContext, active: !sansSynchronisation)
         depot.observateur = synchronisation
+        // Purge automatique de la corbeille au lancement (plus de 30 jours), une fois la
+        // synchronisation branchée : les suppressions définitives partent aussi vers iCloud.
+        depot.purger()
         self.conteneur = conteneur
         _depot = State(initialValue: depot)
         _synchronisation = State(initialValue: synchronisation)

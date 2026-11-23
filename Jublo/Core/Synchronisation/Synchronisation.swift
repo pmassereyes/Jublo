@@ -62,7 +62,7 @@ final class Synchronisation {
     @ObservationIgnored private let miroir: MiroirLocal
     @ObservationIgnored private let stockage: UserDefaults
     @ObservationIgnored private var moteur: CKSyncEngine?
-    @ObservationIgnored private var demarrage: Task<Void, Never>?
+    @ObservationIgnored private let demarreur = Demarreur()
 
     private enum Cle {
         static let role = "sync.role"
@@ -105,33 +105,42 @@ final class Synchronisation {
 
     /// Démarre la synchronisation si iCloud est disponible. Sans effet si elle tourne déjà.
     func demarrer() async {
-        guard active, moteur == nil else { return }
-        if let demarrage {
-            await demarrage.value
-            return
+        guard active else { return }
+        await demarreur.demarrer(saufSi: { self.moteur != nil }) {
+            await self.lancerMoteur()
         }
-        let tache = Task { await lancerMoteur() }
-        demarrage = tache
-        await tache.value
-        demarrage = nil
     }
 
     /// Récupère puis envoie les changements (ouverture de l'app, tirer pour rafraîchir).
     func synchroniserMaintenant() async {
         guard active else { return }
         guard let moteur else {
+            // Le démarrage se termine par une synchronisation.
             await demarrer()
             return
         }
+        await synchroniser(moteur)
+    }
+
+    /// Récupère puis envoie les changements d'un moteur, sans jamais rien démarrer : le
+    /// démarrage l'appelle, et ne doit pas s'attendre lui-même.
+    private func synchroniser(_ moteur: CKSyncEngine) async {
         do {
             try await moteur.fetchChanges()
             try await moteur.sendChanges()
-            etat = .aJour(.now)
+            if moteur === self.moteur {
+                etat = .aJour(.now)
+            }
         } catch {
-            etat = .erreur(Self.message(error))
+            // Un moteur remplacé entre-temps ne touche plus à l'état affiché.
+            if moteur === self.moteur {
+                etat = .erreur(Self.message(error))
+            }
         }
     }
 
+    /// Lance un moteur pour le rôle courant. S'il est remplacé pendant une attente
+    /// (réinitialisation), il est abandonné : l'appel qui a réinitialisé en relance un autre.
     private func lancerMoteur() async {
         let statut: CKAccountStatus
         do {
@@ -160,9 +169,11 @@ final class Synchronisation {
         }
         rejouerChangementsEnAttente(moteur)
         if role == .proprietaire {
-            partage = try? await conteneurCloudKit.privateCloudDatabase.record(for: identifiantPartage) as? CKShare
+            let existant = try? await conteneurCloudKit.privateCloudDatabase.record(for: identifiantPartage) as? CKShare
+            guard moteur === self.moteur else { return }
+            partage = existant
         }
-        await synchroniserMaintenant()
+        await synchroniser(moteur)
     }
 
     // MARK: - Partage
@@ -447,9 +458,10 @@ extension Synchronisation: CKSyncEngineDelegate {
 
 #if DEBUG
 extension Synchronisation {
-    /// Enregistre chaque type avec tous ses champs remplis, dans une zone temporaire de
-    /// l'environnement de développement, puis l'efface. CloudKit ne crée un champ qu'à sa
-    /// première écriture : sans cela, le schéma déployé en production serait incomplet.
+    /// Enregistre chaque type avec tous ses champs remplis, et un partage de zone, dans une zone
+    /// temporaire de l'environnement de développement, puis l'efface. CloudKit ne crée un type
+    /// ou un champ qu'à sa première écriture : sans cela, le schéma déployé en production serait
+    /// incomplet, et la production refuserait le premier partage (`cloudkit.share`).
     func preparerSchema() async throws {
         let base = conteneurCloudKit.privateCloudDatabase
         let zoneTemporaire = CKRecordZone(zoneName: "SchemaJublo")
@@ -479,7 +491,10 @@ extension Synchronisation {
             return enregistrement
         }
         enregistrements[2]["cagnotteId"] = cagnotte.id.uuidString
-        _ = try await base.modifyRecords(saving: enregistrements, deleting: [])
+        let partage = CKShare(recordZoneID: zoneTemporaire.zoneID)
+        partage[CKShare.SystemFieldKey.title] = "Schéma"
+        partage.publicPermission = .none
+        _ = try await base.modifyRecords(saving: enregistrements + [partage], deleting: [])
         _ = try await base.modifyRecordZones(saving: [], deleting: [zoneTemporaire.zoneID])
     }
 }
