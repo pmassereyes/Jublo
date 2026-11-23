@@ -68,10 +68,28 @@ final class Synchronisation {
         static let role = "sync.role"
         static let etatMoteur = "sync.etatMoteur"
         static let enAttente = "sync.enAttente"
+        static let environnement = "sync.environnement"
     }
 
-    init(contexte: ModelContext, stockage: UserDefaults = .standard, active: Bool = true) {
-        miroir = MiroirLocal(contexte: contexte)
+    /// Environnement CloudKit de ce build : un build debug lancé depuis Xcode parle à
+    /// l'environnement de développement, TestFlight à celui de production.
+    nonisolated static var environnementCourant: String {
+        #if DEBUG
+        "developpement"
+        #else
+        "production"
+        #endif
+    }
+
+    init(
+        contexte: ModelContext,
+        stockage: UserDefaults = .standard,
+        active: Bool = true,
+        environnement: String = Synchronisation.environnementCourant
+    ) {
+        let miroir = MiroirLocal(contexte: contexte)
+        Self.oublierAutreEnvironnement(environnement, stockage: stockage, miroir: miroir)
+        self.miroir = miroir
         self.stockage = stockage
         self.active = active
         role = stockage.data(forKey: Cle.role).flatMap { try? JSONDecoder().decode(Role.self, from: $0) } ?? .proprietaire
@@ -253,6 +271,23 @@ final class Synchronisation {
         partage = nil
         role = nouveau
         stockage.set(try? JSONEncoder().encode(nouveau), forKey: Cle.role)
+    }
+
+    /// Les deux environnements CloudKit ne partagent ni zones, ni enregistrements, ni partages.
+    /// Quand un build d'un autre environnement a synchronisé sur cet iPhone (build debug
+    /// installé par-dessus TestFlight, ou l'inverse), on repart de zéro : rôle de propriétaire,
+    /// premier envoi de toute la base. Les données locales sont gardées.
+    private static func oublierAutreEnvironnement(_ environnement: String, stockage: UserDefaults, miroir: MiroirLocal) {
+        // Avant cette clé, seuls des builds debug ont synchronisé.
+        let precedent = stockage.string(forKey: Cle.environnement)
+            ?? (stockage.data(forKey: Cle.etatMoteur) != nil ? "developpement" : nil)
+        if let precedent, precedent != environnement {
+            for cle in [Cle.role, Cle.etatMoteur, Cle.enAttente] {
+                stockage.removeObject(forKey: cle)
+            }
+            miroir.oublierTout()
+        }
+        stockage.set(environnement, forKey: Cle.environnement)
     }
 
     private func lireEtatMoteur() -> CKSyncEngine.State.Serialization? {

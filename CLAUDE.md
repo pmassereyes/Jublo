@@ -98,10 +98,13 @@ Ne pas les casser :
 - Environnements : un build debug lancé depuis Xcode utilise l'environnement CloudKit de
   **développement**, TestFlight celui de **production**. Leurs données ne se croisent pas :
   pour tester le partage, les deux iPhones doivent être sur TestFlight.
-- Déployer le schéma : lancer un build debug **sur le simulateur** connecté à iCloud, puis
-  Nous › Développement › « Préparer le schéma CloudKit ». Pas sur un iPhone qui a l'app
-  TestFlight : le build debug la remplacerait et y laisserait un état de synchronisation de
-  l'environnement de développement. Ensuite, dans la console CloudKit
+- Passer d'un build debug à TestFlight (ou l'inverse) sur le même iPhone : au lancement,
+  `Synchronisation` voit que l'environnement a changé (`sync.environnement`) et repart de
+  zéro (rôle de propriétaire, renvoi de toute la base), en gardant les données locales. Un
+  partage accepté dans un environnement est donc perdu dans l'autre.
+- Déployer le schéma : lancer un build debug sur un iPhone connecté à iCloud (la connexion
+  à iCloud échoue dans les simulateurs iOS 27.0 et 27.2), puis Nous › Développement ›
+  « Préparer le schéma CloudKit ». Ensuite, dans la console CloudKit
   (icloud.developer.apple.com), vérifier que le schéma de développement liste
   `ElementListe`, `Cagnotte`, `Versement` et `cloudkit.share` (sans ce dernier, la
   production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
