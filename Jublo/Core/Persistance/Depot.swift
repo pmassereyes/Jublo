@@ -86,6 +86,120 @@ final class Depot {
         observateur?.aModifie(versement)
     }
 
+    // MARK: - Agenda
+
+    /// Ajoute un rendez-vous. Renvoie nil si le titre est vide.
+    /// `concerne` : le membre concerné, ou nil pour les deux.
+    @discardableResult
+    func ajouterEvenement(
+        _ titre: String, debut: Date, fin: Date? = nil, journeeEntiere: Bool = false,
+        lieu: String? = nil, note: String? = nil, pour concerne: Membre? = nil, par membre: Membre
+    ) -> Evenement? {
+        guard let titre = Self.texte(titre) else { return nil }
+        let evenement = Evenement(titre: titre, debut: debut, auteur: membre, le: horloge())
+        evenement.fin = fin.map { max($0, debut) }
+        evenement.journeeEntiere = journeeEntiere
+        evenement.lieu = Self.texte(lieu)
+        evenement.note = Self.texte(note)
+        evenement.pourId = concerne?.rawValue
+        return inserer(evenement)
+    }
+
+    // MARK: - Vacances envisagées
+
+    @discardableResult
+    func ajouterDestination(
+        _ nom: String, quand: String? = nil, budgetCentimes: Int? = nil, note: String? = nil, par membre: Membre
+    ) -> Destination? {
+        guard let nom = Self.texte(nom) else { return nil }
+        let destination = Destination(nom: nom, auteur: membre, le: horloge())
+        destination.quand = Self.texte(quand)
+        destination.budgetCentimes = budgetCentimes
+        destination.note = Self.texte(note)
+        return inserer(destination)
+    }
+
+    func changerStatut(_ statut: StatutDestination, de destination: Destination) {
+        guard destination.statut != statut else { return }
+        modifier(destination) { $0.statutBrut = statut.rawValue }
+    }
+
+    // MARK: - Sorties à tester
+
+    @discardableResult
+    func ajouterSortie(
+        _ nom: String, categorie: CategorieSortie, lieu: String? = nil, lien: String? = nil,
+        note: String? = nil, par membre: Membre
+    ) -> Sortie? {
+        guard let nom = Self.texte(nom) else { return nil }
+        let sortie = Sortie(nom: nom, categorie: categorie, auteur: membre, le: horloge())
+        sortie.lieu = Self.texte(lieu)
+        sortie.lien = Self.texte(lien)
+        sortie.note = Self.texte(note)
+        return inserer(sortie)
+    }
+
+    /// Marque une sortie comme testée, ou la remet à tester.
+    func basculerTestee(_ sortie: Sortie) {
+        let maintenant = horloge()
+        modifier(sortie) { $0.testeeLe = $0.testeeLe == nil ? maintenant : nil }
+    }
+
+    /// Note de 1 à 5 donnée par `membre` ; nil efface son avis.
+    func donnerAvis(_ avis: Int?, sur element: some Suppressible & AvisDuCouple, par membre: Membre) {
+        guard element.avis(de: membre) != avis else { return }
+        modifier(element) { $0.definirAvis(avis, de: membre) }
+    }
+
+    // MARK: - Retards
+
+    /// Note un retard. Renvoie nil si la durée n'est pas positive.
+    @discardableResult
+    func noterRetard(
+        de retardataire: Membre, minutes: Int, motif: String? = nil, le date: Date? = nil, par membre: Membre
+    ) -> Retard? {
+        guard minutes > 0 else { return nil }
+        let maintenant = horloge()
+        let retard = Retard(retardataire: retardataire, minutes: minutes, survenuLe: date ?? maintenant, auteur: membre, le: maintenant)
+        retard.motif = Self.texte(motif)
+        return inserer(retard)
+    }
+
+    // MARK: - Ce mois-ci, j'aimerais que tu…
+
+    /// Confie un souhait à l'autre pour le mois de `date` (par défaut, le mois en cours).
+    /// Renvoie nil si le texte est vide.
+    @discardableResult
+    func confierSouhait(_ texte: String, pour date: Date? = nil, par membre: Membre) -> Souhait? {
+        guard let texte = Self.texte(texte) else { return nil }
+        let maintenant = horloge()
+        let souhait = Souhait(texte: texte, mois: Souhait.cleMois(date ?? maintenant), auteur: membre, le: maintenant)
+        return inserer(souhait)
+    }
+
+    /// Coche ou décoche un souhait réalisé.
+    func basculerFait(_ souhait: Souhait) {
+        let maintenant = horloge()
+        modifier(souhait) { $0.faitLe = $0.faitLe == nil ? maintenant : nil }
+    }
+
+    // MARK: - Modification
+
+    /// Modifie un élément (formulaires d'édition, avis, statuts) : la date de modification
+    /// avance, puis le changement est enregistré et envoyé.
+    func modifier<Modele: Suppressible>(_ element: Modele, _ changement: (Modele) -> Void) {
+        changement(element)
+        element.modifieLe = horloge()
+        enregistrer()
+        observateur?.aModifie(element)
+    }
+
+    /// Texte nettoyé de ses espaces, ou nil s'il est vide.
+    static func texte(_ texte: String?) -> String? {
+        guard let propre = texte?.trimmingCharacters(in: .whitespacesAndNewlines), !propre.isEmpty else { return nil }
+        return propre
+    }
+
     // MARK: - Corbeille
 
     /// Met un élément à la corbeille.
@@ -117,6 +231,16 @@ final class Depot {
             .map { $0 as any Suppressible }
         elements += lire(FetchDescriptor<Cagnotte>(predicate: #Predicate { $0.supprimeLe != nil }))
             .map { $0 as any Suppressible }
+        elements += lire(FetchDescriptor<Evenement>(predicate: #Predicate { $0.supprimeLe != nil }))
+            .map { $0 as any Suppressible }
+        elements += lire(FetchDescriptor<Destination>(predicate: #Predicate { $0.supprimeLe != nil }))
+            .map { $0 as any Suppressible }
+        elements += lire(FetchDescriptor<Sortie>(predicate: #Predicate { $0.supprimeLe != nil }))
+            .map { $0 as any Suppressible }
+        elements += lire(FetchDescriptor<Retard>(predicate: #Predicate { $0.supprimeLe != nil }))
+            .map { $0 as any Suppressible }
+        elements += lire(FetchDescriptor<Souhait>(predicate: #Predicate { $0.supprimeLe != nil }))
+            .map { $0 as any Suppressible }
         return elements.sorted { ($0.supprimeLe ?? .distantPast) > ($1.supprimeLe ?? .distantPast) }
     }
 
@@ -146,6 +270,13 @@ final class Depot {
     }
 
     // MARK: - Privé
+
+    private func inserer<Modele: Synchronisable>(_ modele: Modele) -> Modele {
+        contexte.insert(modele)
+        enregistrer()
+        observateur?.aModifie(modele)
+        return modele
+    }
 
     private func lire<Modele: PersistentModel>(_ descripteur: FetchDescriptor<Modele>) -> [Modele] {
         do {

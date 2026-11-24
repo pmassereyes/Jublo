@@ -72,6 +72,7 @@ struct SynchronisationEnvironnementTests {
     @Test func leMemeEnvironnementGardeLePartage() throws {
         defer { stockage.removePersistentDomain(forName: suite) }
         try etatSynchronise(dans: "production")
+        stockage.set(Synchronisation.versionSchemaSync, forKey: "sync.versionSchema")
 
         let synchronisation = ouvrir(dans: "production")
 
@@ -96,5 +97,32 @@ struct SynchronisationEnvironnementTests {
         _ = ouvrir(dans: "production")
 
         #expect(stockage.string(forKey: "sync.environnement") == "production")
+        #expect(stockage.integer(forKey: "sync.versionSchema") == Synchronisation.versionSchemaSync)
+    }
+
+    /// Un build plus ancien a ignoré les types qu'il ne connaissait pas : on relit toute la
+    /// zone, sans perdre le partage ni les changements en attente.
+    @Test func unEtatDUnBuildPlusAncienEstReluEnEntier() throws {
+        defer { stockage.removePersistentDomain(forName: suite) }
+        try etatSynchronise(dans: "production")
+        let enAttente = stockage.stringArray(forKey: "sync.enAttente")
+
+        let synchronisation = ouvrir(dans: "production")
+
+        #expect(stockage.data(forKey: "sync.etatMoteur") == nil)
+        #expect(synchronisation.role == .participant(proprietaire: "_proprietaire"))
+        #expect(stockage.stringArray(forKey: "sync.enAttente") == enAttente)
+        #expect(try banc.tous(MetadonneesSync.self).count == 1)
+        #expect(stockage.integer(forKey: "sync.versionSchema") == Synchronisation.versionSchemaSync)
+    }
+
+    @Test func unEtatAJourNEstPasRelu() throws {
+        defer { stockage.removePersistentDomain(forName: suite) }
+        try etatSynchronise(dans: "production")
+        stockage.set(Synchronisation.versionSchemaSync, forKey: "sync.versionSchema")
+
+        _ = ouvrir(dans: "production")
+
+        #expect(stockage.data(forKey: "sync.etatMoteur") != nil)
     }
 }
