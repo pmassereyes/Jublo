@@ -356,6 +356,37 @@ struct MiroirLocalV4Tests {
         #expect(Set(MiroirLocal.typesEnregistrement).isSuperset(of: modeles.map { type(of: $0).typeEnregistrement }))
     }
 
+    /// Pablo et Julie notent la même sortie presque en même temps : la version la plus récente
+    /// l'emporte, sans perdre l'avis de l'autre.
+    @Test func deuxAvisSimultanesSontGardes() throws {
+        let sortie = try #require(banc.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, par: .julie))
+        let serveur = miroir.enregistrement(pour: sortie, zone: zone)
+        serveur["avisJulie"] = 5
+        serveur["modifieLe"] = banc.maintenant.addingTimeInterval(60)
+        banc.avancer(heures: 1)
+        banc.depot.donnerAvis(4, sur: sortie, par: .pablo)
+
+        #expect(miroir.resoudreConflit(avec: serveur) == true)
+
+        #expect(sortie.avis(de: .pablo) == 4)
+        #expect(sortie.avis(de: .julie) == 5)
+        #expect(miroir.enregistrement(pour: sortie, zone: zone)["avisJulie"] as? Int == 5)
+    }
+
+    @Test func unAvisRecuPendantUnEnvoiEnAttenteEstGarde() throws {
+        let destination = try #require(banc.depot.ajouterDestination("Porto", par: .pablo))
+        let recu = miroir.enregistrement(pour: destination, zone: zone)
+        recu["avisPablo"] = 3
+        recu["modifieLe"] = banc.maintenant.addingTimeInterval(60)
+        banc.avancer(heures: 1)
+        banc.depot.donnerAvis(5, sur: destination, par: .julie)
+
+        miroir.appliquer([recu], enAttente: [destination.id.uuidString])
+
+        #expect(destination.avis(de: .julie) == 5)
+        #expect(destination.avis(de: .pablo) == 3)
+    }
+
     @Test func uneSuppressionRecueEffaceUnNouveauType() throws {
         let sortie = try #require(banc.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, par: .julie))
 

@@ -71,6 +71,7 @@ struct MiroirLocal {
         }
         let modifieSurLeServeur = serveur["modifieLe"] as? Date ?? .distantPast
         if local.modifieLe > modifieSurLeServeur {
+            completerAvis(local, depuis: serveur)
             enregistrer()
             return true
         }
@@ -156,6 +157,7 @@ struct MiroirLocal {
         let modifieSurLeServeur = enregistrement["modifieLe"] as? Date ?? .distantPast
         if let local = modele(id, type: enregistrement.recordType) {
             if enAttente.contains(nom) && local.modifieLe > modifieSurLeServeur {
+                completerAvis(local, depuis: enregistrement)
                 memoriser(enregistrement)
                 return
             }
@@ -193,6 +195,19 @@ struct MiroirLocal {
             { Souhait(texte: "", mois: "", auteur: .pablo, le: .now) }
         default:
             nil
+        }
+    }
+
+    /// La version locale l'emporte sur celle du serveur, mais chacun note de son côté : elle
+    /// reprend l'avis que l'autre a donné entre-temps et qu'elle n'a pas encore. Seule limite :
+    /// un avis effacé ici au même moment qu'une autre modification revient.
+    private func completerAvis(_ local: any Synchronisable, depuis serveur: CKRecord) {
+        guard let note = local as? any AvisDuCouple else { return }
+        if note.avisPablo == nil, let avis = serveur["avisPablo"] as? Int {
+            note.avisPablo = avis
+        }
+        if note.avisJulie == nil, let avis = serveur["avisJulie"] as? Int {
+            note.avisJulie = avis
         }
     }
 
