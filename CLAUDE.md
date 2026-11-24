@@ -289,7 +289,8 @@ xcodebuild -exportArchive -archivePath build/Jublo.xcarchive \
 Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFlight. Build 38
 (version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit. Build 41
 (0.2) le même jour : clavier des listes. Build 46 (version 0.3) le même jour : l'app complète
-(schéma V4).
+(schéma V4). Build 52 (version 0.4) le même jour : Siri et assistant étendu (sans changement
+de schéma).
 
 ## Conventions
 
