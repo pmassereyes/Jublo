@@ -236,7 +236,8 @@ xcodebuild -exportArchive -archivePath build/Jublo.xcarchive \
 ```
 
 Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFlight. Build 38
-(version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit.
+(version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit. Build 41
+(0.2) le même jour : clavier des listes.
 
 ## Conventions
 
