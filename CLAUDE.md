@@ -16,6 +16,9 @@ que tu… », corbeille, puis un assistant IA local.
   jusque-là en « Bientôt » (schéma V4). Agenda partagé (onglet Agenda), cagnotte, vacances
   envisagées et sorties à tester (onglet Projets), « Ce mois-ci, j'aimerais que tu… » et
   compteur de retards (onglet Nous), résumé à l'accueil.
+- **Phase 5 (code fait le 2026-11-24, version 0.4)** : raccourci Siri « Ajoute un rendez-vous
+  dans Jublo » (voir la section Siri) et assistant étendu à l'agenda, aux projets et aux
+  souhaits du mois. Aucun changement de schéma.
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
   via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
   réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
@@ -148,19 +151,39 @@ Ne pas les casser :
 
 - `Core/Assistant/` : `ClientCompatibleOpenAI` (flux SSE, erreurs traduites en messages
   clairs), `Fournisseur` (préréglages : adresse, modèle modifiable), `ConfigurationAssistant`
-  et `ContexteAssistant` (consignes envoyées avec chaque question : qui parle, date, listes hors
-  corbeille, 40 éléments au plus par section). `Features/Assistant/` : `Discussion` (en
+  et `ContexteAssistant` (consignes envoyées avec chaque question : qui parle, date et heure,
+  puis, hors corbeille et à 40 éléments au plus par section, les listes, l'agenda à venir et
+  des 30 derniers jours, les cagnottes, vacances et sorties avec les avis de chacun, et les
+  souhaits du mois et des mois précédents). Les retards ne sont pas envoyés. `DonneesAssistant`
+  lit la base au moment de la question. `Features/Assistant/` : `Discussion` (en
   mémoire, non partagée), `AssistantView`, `ReglagesAssistantView`.
 - Réglages **propres à chaque iPhone** : fournisseur, adresse et modèle dans `UserDefaults`.
   La clé d'API est dans le trousseau, une par fournisseur, `ThisDeviceOnly`. Elle n'est
   jamais dans le code ni dans le dépôt, et Pablo ne la communique pas à Claude.
 - HTTPS obligatoire, sauf `localhost` : pas d'exception ATS. Pour un modèle local, on passe
   par `tailscale serve`.
-- L'écran prévient que les listes sont envoyées au fournisseur. Avant une publication sur
+- L'écran prévient que les listes, l'agenda, les projets et les souhaits sont envoyés au fournisseur. Avant une publication sur
   l'App Store, il faudra le déclarer dans la fiche de confidentialité et demander l'accord
   de l'utilisateur (règle 5.1.2 d'Apple).
-- Toute donnée ajoutée au contexte (agenda, cagnotte…) passe par `ContexteAssistant` et ses
-  tests. Aujourd'hui, l'assistant ne connaît que les listes.
+- Toute donnée ajoutée au contexte passe par `ContexteAssistant` et ses tests
+  (`ContexteAssistantTests`).
+
+## Siri
+
+- `Features/Siri/` : intention `AjouterRendezVous` (titre, date, « pour » : nous deux, moi,
+  Pablo ou Julie) et `RaccourcisJublo` (phrases). Pour une app tierce, chaque phrase doit
+  contenir le nom de l'app ; Siri demande ensuite « Quel rendez-vous ? » puis « C'est
+  quand ? ». Une date à minuit pile (« demain » sans heure) donne une journée entière.
+- L'intention tourne dans le processus de l'app, lancé en arrière-plan sans écran. Elle
+  utilise le `Depot`, l'`Identite` et la `Synchronisation` de l'app, enregistrés dans
+  `AppDependencyManager` par `JubloApp.init`. Sans membre choisi, elle refuse au lieu de signer
+  au hasard. Après l'ajout, elle synchronise 5 s au plus (`synchroniser(auPlus:)`), car le
+  `.task` de la scène qui démarre la synchronisation ne s'exécute pas.
+- La logique testable est dans `RendezVousDicte` (`SiriTests`). Dans le simulateur, l'action
+  se teste depuis l'app Raccourcis (nouveau raccourci › Éditeur › recherche « Jublo »). Siri à
+  la voix ne se teste que sur un iPhone, avec un build TestFlight : un build debug lancé par
+  Siri ouvrirait la vraie base dans l'environnement CloudKit de développement.
+- L'astuce Siri de l'Agenda (`SiriTipView`) se masque par sa croix (`agenda.astuceSiri`).
 
 ## Libellés
 
@@ -192,7 +215,7 @@ Jublo/
 ├── Core/            Modeles/, Persistance/, Identite/, Assistant/, Synchronisation/ (aucune vue)
 ├── DesignSystem/    couleurs, typographie, composants réutilisables, polices
 ├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
-│                    Corbeille, Assistant)
+│                    Corbeille, Assistant, Siri)
 └── Ressources/      asset catalog
 JubloTests/          Swift Testing, base en mémoire, horloge injectée (`Banc`)
 JubloUITests/        XCUITest : parcours Listes → corbeille sur base vierge
