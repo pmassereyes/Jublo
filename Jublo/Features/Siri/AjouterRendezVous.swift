@@ -78,8 +78,9 @@ enum RendezVousDicte {
         }
     }
 
-    /// Enregistre le rendez-vous au nom du membre de cet iPhone. Une heure à minuit pile vient
-    /// d'une date dite sans heure (« demain ») : le rendez-vous dure alors toute la journée.
+    /// Enregistre le rendez-vous au nom du membre de cet iPhone. Une heure à minuit pile est
+    /// prise pour une date sans heure : le rendez-vous dure alors toute la journée. (Dans l'app
+    /// Raccourcis, une date sans heure reçoit l'heure courante ; reste à voir ce que fait Siri.)
     @discardableResult
     static func enregistrer(
         titre: String, quand: Date, pour: PourQuiSiri, depot: Depot, identite: Identite,

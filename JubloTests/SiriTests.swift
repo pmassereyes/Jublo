@@ -107,6 +107,25 @@ import Testing
             == "C'est noté : « Week-end », samedi 28 novembre, toute la journée (pour toi).")
     }
 
+    @Test func uneAttenteTropLongueEstCoupee() async {
+        let fin = AsyncStream.makeStream(of: Void.self)
+        let debut = ContinuousClock.now
+        await Attente.auPlus(.milliseconds(200)) {
+            try? await Task.sleep(for: .seconds(3))
+            fin.continuation.yield()
+        }
+        #expect(ContinuousClock.now - debut < .seconds(1))
+        // L'opération n'est pas abandonnée : elle finit seule.
+        for await _ in fin.stream { break }
+        #expect(ContinuousClock.now - debut >= .seconds(3))
+    }
+
+    @Test func uneAttenteCourteNAttendPasLeDelai() async {
+        let debut = ContinuousClock.now
+        await Attente.auPlus(.seconds(5)) {}
+        #expect(ContinuousClock.now - debut < .seconds(1))
+    }
+
     @Test func uneSynchronisationInactiveRendLaMainToutDeSuite() async throws {
         let banc = try Banc()
         let suite = "tests-siri-sync-\(UUID().uuidString)"

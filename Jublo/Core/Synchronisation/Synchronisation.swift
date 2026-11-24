@@ -153,13 +153,7 @@ final class Synchronisation {
     /// La synchronisation continue ensuite tant que l'app tourne.
     func synchroniser(auPlus delai: Duration) async {
         guard active else { return }
-        let tache = Task { await synchroniserMaintenant() }
-        await withTaskGroup(of: Void.self) { groupe in
-            groupe.addTask { await tache.value }
-            groupe.addTask { try? await Task.sleep(for: delai) }
-            await groupe.next()
-            groupe.cancelAll()
-        }
+        await Attente.auPlus(delai) { await self.synchroniserMaintenant() }
     }
 
     /// Récupère puis envoie les changements d'un moteur, sans jamais rien démarrer : le

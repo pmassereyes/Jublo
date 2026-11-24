@@ -173,11 +173,14 @@ Ne pas les casser :
 - `Features/Siri/` : intention `AjouterRendezVous` (titre, date, « pour » : nous deux, moi,
   Pablo ou Julie) et `RaccourcisJublo` (phrases). Pour une app tierce, chaque phrase doit
   contenir le nom de l'app ; Siri demande ensuite « Quel rendez-vous ? » puis « C'est
-  quand ? ». Une date à minuit pile (« demain » sans heure) donne une journée entière.
+  quand ? ». Une date à minuit pile donne une journée entière. À vérifier à la voix : dans
+  l'app Raccourcis, une date choisie sans heure reçoit l'heure courante, pas minuit ; on ne
+  sait pas encore ce que Siri fait de « demain » seul.
 - L'intention tourne dans le processus de l'app, lancé en arrière-plan sans écran. Elle
   utilise le `Depot`, l'`Identite` et la `Synchronisation` de l'app, enregistrés dans
   `AppDependencyManager` par `JubloApp.init`. Sans membre choisi, elle refuse au lieu de signer
-  au hasard. Après l'ajout, elle synchronise 5 s au plus (`synchroniser(auPlus:)`), car le
+  au hasard. Après l'ajout, elle synchronise 5 s au plus (`synchroniser(auPlus:)`, via
+  `Attente.auPlus`, une vraie course : pas de `withTaskGroup`, qui attendrait tout), car le
   `.task` de la scène qui démarre la synchronisation ne s'exécute pas.
 - La logique testable est dans `RendezVousDicte` (`SiriTests`). Dans le simulateur, l'action
   se teste depuis l'app Raccourcis (nouveau raccourci › Éditeur › recherche « Jublo »). Siri à
