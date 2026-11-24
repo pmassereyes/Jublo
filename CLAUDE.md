@@ -108,7 +108,14 @@ Ne pas les casser :
   (icloud.developer.apple.com), vérifier que le schéma de développement liste
   `ElementListe`, `Cagnotte`, `Versement` et `cloudkit.share` (sans ce dernier, la
   production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
-  Changes ».
+  Changes ». Dernier déploiement : 2026-11-24 (les 4 types ci-dessus).
+- Build debug sur l'iPhone sans passer par l'interface d'Xcode (iPhone déverrouillé et
+  branché, identifiant via `xcrun devicectl list devices`) :
+  `xcodebuild -scheme Jublo -destination 'generic/platform=iOS' -derivedDataPath <dossier>
+  -allowProvisioningUpdates build`, puis `xcrun devicectl device install app --device <id>
+  <dossier>/Build/Products/Debug-iphoneos/Jublo.app` et `xcrun devicectl device process
+  launch --device <id> com.pmassereyes.jublo -- -onglet nous` (le `--` est obligatoire
+  avant les arguments de l'app).
 - Tests : aucun appel à iCloud (`Synchronisation(active: false)` avec `-baseEnMemoire` ou
   dans l'app hôte des tests unitaires). Le partage réel se teste sur les deux iPhones.
 
@@ -228,7 +235,8 @@ xcodebuild -exportArchive -archivePath build/Jublo.xcarchive \
   -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates
 ```
 
-Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFlight.
+Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFlight. Build 38
+(version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit.
 
 ## Conventions
 
