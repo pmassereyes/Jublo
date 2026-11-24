@@ -149,6 +149,19 @@ final class Synchronisation {
         await synchroniser(moteur)
     }
 
+    /// Synchronise sans attendre plus de `delai` (raccourci Siri : la réponse ne doit pas traîner).
+    /// La synchronisation continue ensuite tant que l'app tourne.
+    func synchroniser(auPlus delai: Duration) async {
+        guard active else { return }
+        let tache = Task { await synchroniserMaintenant() }
+        await withTaskGroup(of: Void.self) { groupe in
+            groupe.addTask { await tache.value }
+            groupe.addTask { try? await Task.sleep(for: delai) }
+            await groupe.next()
+            groupe.cancelAll()
+        }
+    }
+
     /// Récupère puis envoie les changements d'un moteur, sans jamais rien démarrer : le
     /// démarrage l'appelle, et ne doit pas s'attendre lui-même.
     private func synchroniser(_ moteur: CKSyncEngine) async {

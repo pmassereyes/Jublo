@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -8,7 +9,7 @@ struct JubloApp: App {
 
     private let conteneur: ModelContainer
     @State private var depot: Depot
-    @State private var identite = Identite()
+    @State private var identite: Identite
     @State private var configurationAssistant: ConfigurationAssistant
     @State private var synchronisation: Synchronisation
 
@@ -46,8 +47,15 @@ struct JubloApp: App {
         // Purge automatique de la corbeille au lancement (plus de 30 jours), une fois la
         // synchronisation branchée : les suppressions définitives partent aussi vers iCloud.
         depot.purger()
+        let identite = Identite()
+        // Raccourcis Siri : l'intention travaille sur la même base, le même membre et la même
+        // synchronisation que l'app (voir `AjouterRendezVous`).
+        AppDependencyManager.shared.add(dependency: depot)
+        AppDependencyManager.shared.add(dependency: identite)
+        AppDependencyManager.shared.add(dependency: synchronisation)
         self.conteneur = conteneur
         _depot = State(initialValue: depot)
+        _identite = State(initialValue: identite)
         _synchronisation = State(initialValue: synchronisation)
         #if DEBUG
         // `-assistantSimule` : l'assistant répond sans fournisseur (captures, tests d'interface).
