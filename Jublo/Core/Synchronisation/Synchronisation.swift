@@ -69,7 +69,15 @@ final class Synchronisation {
         static let etatMoteur = "sync.etatMoteur"
         static let enAttente = "sync.enAttente"
         static let environnement = "sync.environnement"
+        static let versionSchema = "sync.versionSchema"
     }
+
+    /// Version des types et des champs synchronisés : à augmenter à chaque type ou champ
+    /// CloudKit ajouté. Un build plus ancien ignore ce qu'il ne connaît pas, mais le jeton de
+    /// CKSyncEngine avance quand même : au premier lancement d'un build plus récent, on relit
+    /// donc toute la zone (voir `relireSiSchemaPlusRecent`).
+    /// 1 : listes et cagnotte (build 38). 2 : agenda, vacances, sorties, retards, souhaits.
+    static let versionSchemaSync = 2
 
     /// Environnement CloudKit de ce build : un build debug lancé depuis Xcode parle à
     /// l'environnement de développement, TestFlight à celui de production.
@@ -89,6 +97,7 @@ final class Synchronisation {
     ) {
         let miroir = MiroirLocal(contexte: contexte)
         Self.oublierAutreEnvironnement(environnement, stockage: stockage, miroir: miroir)
+        Self.relireSiSchemaPlusRecent(stockage: stockage)
         self.miroir = miroir
         self.stockage = stockage
         self.active = active
@@ -288,6 +297,20 @@ final class Synchronisation {
             miroir.oublierTout()
         }
         stockage.set(environnement, forKey: Cle.environnement)
+    }
+
+    /// Premier lancement d'un build qui synchronise de nouveaux types ou champs : on oublie
+    /// l'état du moteur pour relire toute la zone, ce que l'ancien build a ignoré compris.
+    /// Le rôle, les métadonnées et les changements en attente sont gardés ; le démarrage
+    /// renvoie aussi toute la base locale, et la version la plus récente l'emporte.
+    private static func relireSiSchemaPlusRecent(stockage: UserDefaults) {
+        // Avant cette clé, un état du moteur vient d'un build de la version 1.
+        let precedente = stockage.object(forKey: Cle.versionSchema) as? Int
+            ?? (stockage.data(forKey: Cle.etatMoteur) != nil ? 1 : nil)
+        if let precedente, precedente < versionSchemaSync {
+            stockage.removeObject(forKey: Cle.etatMoteur)
+        }
+        stockage.set(versionSchemaSync, forKey: Cle.versionSchema)
     }
 
     private func lireEtatMoteur() -> CKSyncEngine.State.Serialization? {
@@ -516,7 +539,43 @@ extension Synchronisation {
         versement.annuleLe = date
         versement.annulePar = Membre.julie.rawValue
 
-        let modeles: [any Synchronisable] = [element, cagnotte, versement]
+        let evenement = Evenement(titre: "Schéma", debut: date, auteur: .pablo, le: date)
+        evenement.fin = date
+        evenement.journeeEntiere = true
+        evenement.lieu = "Schéma"
+        evenement.note = "Schéma"
+        evenement.pourId = Membre.julie.rawValue
+        evenement.supprimeLe = date
+        evenement.supprimePar = Membre.pablo.rawValue
+        let destination = Destination(nom: "Schéma", auteur: .pablo, le: date)
+        destination.quand = "Schéma"
+        destination.budgetCentimes = 100
+        destination.note = "Schéma"
+        destination.statutBrut = StatutDestination.reservee.rawValue
+        destination.avisPablo = 5
+        destination.avisJulie = 4
+        destination.supprimeLe = date
+        destination.supprimePar = Membre.pablo.rawValue
+        let sortie = Sortie(nom: "Schéma", categorie: .expo, auteur: .julie, le: date)
+        sortie.lieu = "Schéma"
+        sortie.lien = "https://example.com"
+        sortie.note = "Schéma"
+        sortie.testeeLe = date
+        sortie.avisPablo = 3
+        sortie.avisJulie = 2
+        sortie.supprimeLe = date
+        sortie.supprimePar = Membre.julie.rawValue
+        let retard = Retard(retardataire: .pablo, minutes: 10, survenuLe: date, auteur: .julie, le: date)
+        retard.motif = "Schéma"
+        retard.supprimeLe = date
+        retard.supprimePar = Membre.julie.rawValue
+        let souhait = Souhait(texte: "Schéma", mois: Souhait.cleMois(date), auteur: .julie, le: date)
+        souhait.faitLe = date
+        souhait.supprimeLe = date
+        souhait.supprimePar = Membre.pablo.rawValue
+
+        // Le versement reste en troisième position : son `cagnotteId` est ajouté plus bas.
+        let modeles: [any Synchronisable] = [element, cagnotte, versement, evenement, destination, sortie, retard, souhait]
         let enregistrements = modeles.map { modele in
             let enregistrement = CKRecord(
                 recordType: type(of: modele).typeEnregistrement,

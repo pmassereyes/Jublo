@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Version 3 : métadonnées CloudKit (`MetadonneesSync`) pour la synchronisation.
+/// Version 3 (figée) : métadonnées CloudKit (`MetadonneesSync`) pour la synchronisation.
 ///
 /// Contraintes CloudKit : propriétés optionnelles ou avec valeur par défaut, pas de
 /// `@Attribute(.unique)`, relations optionnelles.
@@ -28,22 +28,3 @@ extension SchemaV3 {
         }
     }
 }
-
-/// Version courante du schéma, ouverte par `Persistance`.
-typealias SchemaActuel = SchemaV3
-
-enum PlanMigrationJublo: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [SchemaV1.self, SchemaV2.self, SchemaV3.self] }
-
-    static var stages: [MigrationStage] {
-        [
-            .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self),
-            .lightweight(fromVersion: SchemaV2.self, toVersion: SchemaV3.self),
-        ]
-    }
-}
-
-typealias ElementListe = SchemaV2.ElementListe
-typealias Cagnotte = SchemaV1.Cagnotte
-typealias Versement = SchemaV1.Versement
-typealias MetadonneesSync = SchemaV3.MetadonneesSync

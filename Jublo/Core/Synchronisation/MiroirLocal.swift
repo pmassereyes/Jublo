@@ -14,6 +14,8 @@ struct MiroirLocal {
     /// une cagnotte avant ses versements.
     static let typesEnregistrement = [
         Cagnotte.typeEnregistrement, Versement.typeEnregistrement, ElementListe.typeEnregistrement,
+        Evenement.typeEnregistrement, Destination.typeEnregistrement, Sortie.typeEnregistrement,
+        Retard.typeEnregistrement, Souhait.typeEnregistrement,
     ]
 
     // MARK: - Envoi
@@ -41,6 +43,8 @@ struct MiroirLocal {
         modeles += ((try? contexte.fetch(FetchDescriptor<Cagnotte>())) ?? []).map { $0 as any Synchronisable }
         modeles += ((try? contexte.fetch(FetchDescriptor<Versement>())) ?? []).map { $0 as any Synchronisable }
         modeles += ((try? contexte.fetch(FetchDescriptor<ElementListe>())) ?? []).map { $0 as any Synchronisable }
+        modeles += tous(Evenement.self) + tous(Destination.self) + tous(Sortie.self)
+        modeles += tous(Retard.self) + tous(Souhait.self)
         return modeles
     }
 
@@ -67,6 +71,7 @@ struct MiroirLocal {
         }
         let modifieSurLeServeur = serveur["modifieLe"] as? Date ?? .distantPast
         if local.modifieLe > modifieSurLeServeur {
+            completerAvis(local, depuis: serveur)
             enregistrer()
             return true
         }
@@ -129,8 +134,18 @@ struct MiroirLocal {
             return cagnotte(id)
         case Versement.typeEnregistrement?:
             return versement(id)
+        case Evenement.typeEnregistrement?:
+            return chercher(Evenement.self, id)
+        case Destination.typeEnregistrement?:
+            return chercher(Destination.self, id)
+        case Sortie.typeEnregistrement?:
+            return chercher(Sortie.self, id)
+        case Retard.typeEnregistrement?:
+            return chercher(Retard.self, id)
+        case Souhait.typeEnregistrement?:
+            return chercher(Souhait.self, id)
         case nil:
-            return element(id) ?? cagnotte(id) ?? versement(id)
+            return Self.typesEnregistrement.lazy.compactMap { modele(id, type: $0) }.first
         default:
             return nil
         }
@@ -142,6 +157,7 @@ struct MiroirLocal {
         let modifieSurLeServeur = enregistrement["modifieLe"] as? Date ?? .distantPast
         if let local = modele(id, type: enregistrement.recordType) {
             if enAttente.contains(nom) && local.modifieLe > modifieSurLeServeur {
+                completerAvis(local, depuis: enregistrement)
                 memoriser(enregistrement)
                 return
             }
@@ -167,8 +183,31 @@ struct MiroirLocal {
             { Cagnotte(nom: "", objectifCentimes: nil, auteur: .pablo, le: .now) }
         case Versement.typeEnregistrement:
             { Versement(montantCentimes: 0, note: nil, auteur: .pablo, le: .now) }
+        case Evenement.typeEnregistrement:
+            { Evenement(titre: "", debut: .now, auteur: .pablo, le: .now) }
+        case Destination.typeEnregistrement:
+            { Destination(nom: "", auteur: .pablo, le: .now) }
+        case Sortie.typeEnregistrement:
+            { Sortie(nom: "", categorie: .autre, auteur: .pablo, le: .now) }
+        case Retard.typeEnregistrement:
+            { Retard(retardataire: .pablo, minutes: 0, survenuLe: .now, auteur: .pablo, le: .now) }
+        case Souhait.typeEnregistrement:
+            { Souhait(texte: "", mois: "", auteur: .pablo, le: .now) }
         default:
             nil
+        }
+    }
+
+    /// La version locale l'emporte sur celle du serveur, mais chacun note de son côté : elle
+    /// reprend l'avis que l'autre a donné entre-temps et qu'elle n'a pas encore. Seule limite :
+    /// un avis effacé ici au même moment qu'une autre modification revient.
+    private func completerAvis(_ local: any Synchronisable, depuis serveur: CKRecord) {
+        guard let note = local as? any AvisDuCouple else { return }
+        if note.avisPablo == nil, let avis = serveur["avisPablo"] as? Int {
+            note.avisPablo = avis
+        }
+        if note.avisJulie == nil, let avis = serveur["avisJulie"] as? Int {
+            note.avisJulie = avis
         }
     }
 
@@ -196,6 +235,32 @@ struct MiroirLocal {
 
     private func versement(_ id: UUID) -> Versement? {
         try? contexte.fetch(FetchDescriptor<Versement>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    // Filtres écrits type par type : SwiftData ne sait pas filtrer sur une propriété
+    // atteinte à travers un protocole.
+    private func chercher(_: Evenement.Type, _ id: UUID) -> Evenement? {
+        try? contexte.fetch(FetchDescriptor<Evenement>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func chercher(_: Destination.Type, _ id: UUID) -> Destination? {
+        try? contexte.fetch(FetchDescriptor<Destination>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func chercher(_: Sortie.Type, _ id: UUID) -> Sortie? {
+        try? contexte.fetch(FetchDescriptor<Sortie>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func chercher(_: Retard.Type, _ id: UUID) -> Retard? {
+        try? contexte.fetch(FetchDescriptor<Retard>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func chercher(_: Souhait.Type, _ id: UUID) -> Souhait? {
+        try? contexte.fetch(FetchDescriptor<Souhait>(predicate: #Predicate { $0.id == id })).first
+    }
+
+    private func tous<Modele: Suppressible>(_: Modele.Type) -> [any Synchronisable] {
+        ((try? contexte.fetch(FetchDescriptor<Modele>())) ?? []).map { $0 as any Synchronisable }
     }
 }
 

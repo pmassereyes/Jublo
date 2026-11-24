@@ -12,10 +12,25 @@ struct CorbeilleView: View {
     private var elementsListe: [ElementListe]
     @Query(filter: #Predicate<Cagnotte> { $0.supprimeLe != nil })
     private var cagnottes: [Cagnotte]
+    @Query(filter: #Predicate<Evenement> { $0.supprimeLe != nil })
+    private var evenements: [Evenement]
+    @Query(filter: #Predicate<Destination> { $0.supprimeLe != nil })
+    private var destinations: [Destination]
+    @Query(filter: #Predicate<Sortie> { $0.supprimeLe != nil })
+    private var sorties: [Sortie]
+    @Query(filter: #Predicate<Retard> { $0.supprimeLe != nil })
+    private var retards: [Retard]
+    @Query(filter: #Predicate<Souhait> { $0.supprimeLe != nil })
+    private var souhaits: [Souhait]
 
     private var entrees: [EntreeCorbeille] {
-        let toutes = elementsListe.map { EntreeCorbeille(element: $0) }
-            + cagnottes.map { EntreeCorbeille(element: $0) }
+        var toutes: [EntreeCorbeille] = elementsListe.map { EntreeCorbeille(element: $0) }
+        toutes += cagnottes.map { EntreeCorbeille(element: $0) }
+        toutes += evenements.map { EntreeCorbeille(element: $0) }
+        toutes += destinations.map { EntreeCorbeille(element: $0) }
+        toutes += sorties.map { EntreeCorbeille(element: $0) }
+        toutes += retards.map { EntreeCorbeille(element: $0) }
+        toutes += souhaits.map { EntreeCorbeille(element: $0) }
         return toutes.sorted { $0.supprimeLe > $1.supprimeLe }
     }
 
@@ -103,8 +118,12 @@ private struct LigneCorbeille: View {
         }
     }
 
-    /// Type de l'élément, précisé du destinataire pour la wish list (« Wish list · pour moi »).
+    /// Type de l'élément, précisé du destinataire pour la wish list (« Wish list · pour moi »)
+    /// et du retardataire pour un retard (« Retards · Julie »).
     private var etiquette: String {
+        if let retard = entree.element as? Retard, let retardataire = retard.retardataire {
+            return "\(retard.libelleType) · \(Libelles.qui(retardataire, vuPar: identite.membre))"
+        }
         if let element = entree.element as? ElementListe, element.type == .wishList,
            let destinataire = element.destinataire {
             let pour = Libelles.pour(destinataire, vuPar: identite.membre)

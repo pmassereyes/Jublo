@@ -27,6 +27,12 @@ enum Libelles {
         membre == courant ? "Ajouter à mes envies" : "Ajouter une idée pour \(membre.prenom)"
     }
 
+    /// À qui s'adresse un rendez-vous : « Vous deux », « Toi » ou le prénom de l'autre.
+    static func concerne(_ membre: Membre?, vuPar courant: Membre) -> String {
+        guard let membre else { return "Vous deux" }
+        return quiEnDebut(membre, vuPar: courant)
+    }
+
     /// Titre d'un souhait « ce mois-ci, j'aimerais que tu… » selon qui le lit.
     static func souhait(de auteur: Membre, vuPar courant: Membre) -> String {
         auteur == courant

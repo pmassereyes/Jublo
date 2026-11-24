@@ -97,6 +97,158 @@ extension Versement: Synchronisable {
     }
 }
 
+extension Evenement: Synchronisable {
+    static var typeEnregistrement: String { "Evenement" }
+
+    func remplir(_ enregistrement: CKRecord) {
+        enregistrement.encryptedValues["titre"] = titre
+        enregistrement["debut"] = debut
+        enregistrement["fin"] = fin
+        enregistrement["journeeEntiere"] = journeeEntiere
+        enregistrement.encryptedValues["lieu"] = lieu
+        enregistrement.encryptedValues["note"] = note
+        enregistrement["pourId"] = pourId
+        enregistrement.remplirSuppressible(self)
+    }
+
+    func reprendre(_ enregistrement: CKRecord) {
+        titre = enregistrement.encryptedValues["titre"] as? String ?? ""
+        debut = enregistrement["debut"] as? Date ?? .now
+        fin = enregistrement["fin"] as? Date
+        journeeEntiere = enregistrement["journeeEntiere"] as? Bool ?? false
+        lieu = enregistrement.encryptedValues["lieu"] as? String
+        note = enregistrement.encryptedValues["note"] as? String
+        pourId = enregistrement["pourId"] as? String
+        enregistrement.reprendreSuppressible(self)
+    }
+}
+
+extension Destination: Synchronisable {
+    static var typeEnregistrement: String { "Destination" }
+
+    func remplir(_ enregistrement: CKRecord) {
+        enregistrement.encryptedValues["nom"] = nom
+        enregistrement.encryptedValues["quand"] = quand
+        enregistrement["budgetCentimes"] = budgetCentimes
+        enregistrement.encryptedValues["note"] = note
+        enregistrement["statutBrut"] = statutBrut
+        enregistrement["avisPablo"] = avisPablo
+        enregistrement["avisJulie"] = avisJulie
+        enregistrement.remplirSuppressible(self)
+    }
+
+    func reprendre(_ enregistrement: CKRecord) {
+        nom = enregistrement.encryptedValues["nom"] as? String ?? ""
+        quand = enregistrement.encryptedValues["quand"] as? String
+        budgetCentimes = enregistrement["budgetCentimes"] as? Int
+        note = enregistrement.encryptedValues["note"] as? String
+        statutBrut = enregistrement["statutBrut"] as? String ?? StatutDestination.envisagee.rawValue
+        avisPablo = enregistrement["avisPablo"] as? Int
+        avisJulie = enregistrement["avisJulie"] as? Int
+        enregistrement.reprendreSuppressible(self)
+    }
+}
+
+extension Sortie: Synchronisable {
+    static var typeEnregistrement: String { "Sortie" }
+
+    func remplir(_ enregistrement: CKRecord) {
+        enregistrement.encryptedValues["nom"] = nom
+        enregistrement["categorieBrut"] = categorieBrut
+        enregistrement.encryptedValues["lieu"] = lieu
+        enregistrement.encryptedValues["lien"] = lien
+        enregistrement.encryptedValues["note"] = note
+        enregistrement["testeeLe"] = testeeLe
+        enregistrement["avisPablo"] = avisPablo
+        enregistrement["avisJulie"] = avisJulie
+        enregistrement.remplirSuppressible(self)
+    }
+
+    func reprendre(_ enregistrement: CKRecord) {
+        nom = enregistrement.encryptedValues["nom"] as? String ?? ""
+        categorieBrut = enregistrement["categorieBrut"] as? String ?? CategorieSortie.autre.rawValue
+        lieu = enregistrement.encryptedValues["lieu"] as? String
+        lien = enregistrement.encryptedValues["lien"] as? String
+        note = enregistrement.encryptedValues["note"] as? String
+        testeeLe = enregistrement["testeeLe"] as? Date
+        avisPablo = enregistrement["avisPablo"] as? Int
+        avisJulie = enregistrement["avisJulie"] as? Int
+        enregistrement.reprendreSuppressible(self)
+    }
+}
+
+extension Retard: Synchronisable {
+    static var typeEnregistrement: String { "Retard" }
+
+    func remplir(_ enregistrement: CKRecord) {
+        enregistrement["retardataireId"] = retardataireId
+        enregistrement["minutes"] = minutes
+        enregistrement.encryptedValues["motif"] = motif
+        enregistrement["survenuLe"] = survenuLe
+        enregistrement.remplirSuppressible(self)
+    }
+
+    func reprendre(_ enregistrement: CKRecord) {
+        retardataireId = enregistrement["retardataireId"] as? String ?? Membre.pablo.rawValue
+        minutes = enregistrement["minutes"] as? Int ?? 0
+        motif = enregistrement.encryptedValues["motif"] as? String
+        survenuLe = enregistrement["survenuLe"] as? Date ?? .now
+        enregistrement.reprendreSuppressible(self)
+    }
+}
+
+extension Souhait: Synchronisable {
+    static var typeEnregistrement: String { "Souhait" }
+
+    func remplir(_ enregistrement: CKRecord) {
+        enregistrement.encryptedValues["texte"] = texte
+        enregistrement["mois"] = mois
+        enregistrement["faitLe"] = faitLe
+        enregistrement.remplirSuppressible(self)
+    }
+
+    func reprendre(_ enregistrement: CKRecord) {
+        texte = enregistrement.encryptedValues["texte"] as? String ?? ""
+        mois = enregistrement["mois"] as? String ?? ""
+        faitLe = enregistrement["faitLe"] as? Date
+        enregistrement.reprendreSuppressible(self)
+    }
+}
+
+/// Champs communs aux modèles `Suppressible` créés à partir de la V4 : auteur, dates et
+/// suppression douce. Les modèles plus anciens les écrivent eux-mêmes, champ par champ.
+private protocol ChampsCommuns: AnyObject {
+    var auteurId: String { get set }
+    var creeLe: Date { get set }
+    var modifieLe: Date { get set }
+    var supprimeLe: Date? { get set }
+    var supprimePar: String? { get set }
+}
+
+extension Evenement: ChampsCommuns {}
+extension Destination: ChampsCommuns {}
+extension Sortie: ChampsCommuns {}
+extension Retard: ChampsCommuns {}
+extension Souhait: ChampsCommuns {}
+
+private extension CKRecord {
+    func remplirSuppressible(_ modele: some ChampsCommuns) {
+        self["auteurId"] = modele.auteurId
+        self["creeLe"] = modele.creeLe
+        self["modifieLe"] = modele.modifieLe
+        self["supprimeLe"] = modele.supprimeLe
+        self["supprimePar"] = modele.supprimePar
+    }
+
+    func reprendreSuppressible(_ modele: some ChampsCommuns) {
+        modele.auteurId = self["auteurId"] as? String ?? ""
+        modele.creeLe = self["creeLe"] as? Date ?? .now
+        modele.modifieLe = self["modifieLe"] as? Date ?? .now
+        modele.supprimeLe = self["supprimeLe"] as? Date
+        modele.supprimePar = self["supprimePar"] as? String
+    }
+}
+
 extension CKRecord {
     /// Champs système (zone, étiquette de version…), à conserver entre deux envois.
     var champsSysteme: Data {

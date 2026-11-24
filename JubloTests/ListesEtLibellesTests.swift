@@ -100,3 +100,43 @@ struct IdentiteTests {
         #expect(relue.estChoisi)
     }
 }
+
+struct FormatsTests {
+    @Test(arguments: [
+        ("12", 1_200), ("12,5", 1_250), ("12.50", 1_250), ("0,99", 99), ("1 250,00 €", 125_000), (",5", 50),
+    ])
+    func unMontantSaisiDevientDesCentimes(saisie: String, centimes: Int) {
+        #expect(Formats.centimes(depuis: saisie) == centimes)
+    }
+
+    @Test(arguments: ["", "0", "0,00", "abc", "12,345", "1.2.3", "-5", "12a"])
+    func unMontantInvalideEstRefuse(saisie: String) {
+        #expect(Formats.centimes(depuis: saisie) == nil)
+    }
+
+    @Test func unMontantRevientDansLeChampDeSaisie() {
+        #expect(Formats.saisieMontant(1_250) == "12,50")
+        #expect(Formats.saisieMontant(1_200) == "12")
+        #expect(Formats.saisieMontant(nil) == "")
+    }
+
+    @Test func leMoisSAfficheAvecUneMajuscule() {
+        var calendrier = Calendar(identifier: .gregorian)
+        calendrier.timeZone = TimeZone(identifier: "Europe/Paris")!
+        #expect(Formats.mois("2026-11", calendrier: calendrier) == "Novembre 2026")
+        #expect(Formats.mois("n'importe quoi", calendrier: calendrier) == "n'importe quoi")
+    }
+
+    @Test func lesJoursProchesOntLeurNom() {
+        let maintenant = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        #expect(Formats.jourProche(maintenant, maintenant: maintenant) == "Aujourd'hui")
+        #expect(Formats.jourProche(maintenant.addingTimeInterval(86_400), maintenant: maintenant) == "Demain")
+        #expect(Formats.jourProche(maintenant.addingTimeInterval(3 * 86_400), maintenant: maintenant) == Formats.jour(maintenant.addingTimeInterval(3 * 86_400)))
+    }
+
+    @Test func unRendezVousSAdresseAToiALAutreOuAuxDeux() {
+        #expect(Libelles.concerne(nil, vuPar: .pablo) == "Vous deux")
+        #expect(Libelles.concerne(.pablo, vuPar: .pablo) == "Toi")
+        #expect(Libelles.concerne(.julie, vuPar: .pablo) == "Julie")
+    }
+}
