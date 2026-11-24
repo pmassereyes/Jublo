@@ -1,13 +1,13 @@
 import SwiftData
 import SwiftUI
 
-/// Discussion avec l'assistant, qui connaît vos listes. Poussé depuis l'Accueil.
+/// Discussion avec l'assistant, qui connaît vos listes, l'agenda, les projets et les souhaits
+/// du mois (`ContexteAssistant`). Poussé depuis l'Accueil.
 /// Le fournisseur d'IA se choisit dans `ReglagesAssistantView`.
 struct AssistantView: View {
     @Environment(Identite.self) private var identite
     @Environment(ConfigurationAssistant.self) private var configuration
-    @Query(filter: #Predicate<ElementListe> { $0.supprimeLe == nil })
-    private var elements: [ElementListe]
+    @Environment(\.modelContext) private var contexte
 
     @State private var discussion = Discussion()
     @State private var saisie = ""
@@ -75,7 +75,7 @@ struct AssistantView: View {
                     Label("Bonjour \(identite.membre.prenom)", systemImage: "sparkles")
                         .font(.jubloSousTitre)
                         .foregroundStyle(.texte)
-                    Text("Pose une question sur vos listes : ce qu'il reste à acheter, les pense-bêtes en attente, une idée de cadeau…")
+                    Text("Pose une question sur vos listes, votre agenda, vos projets ou vos demandes du mois : ce qu'il reste à acheter, ce qui est prévu ce week-end, une idée de cadeau…")
                         .font(.jubloCorps)
                         .foregroundStyle(.texteSecondaire)
                 }
@@ -90,6 +90,7 @@ struct AssistantView: View {
     private var questionsSuggerees: [String] {
         [
             "Qu'est-ce qu'il reste à acheter ?",
+            "Qu'est-ce qu'on a de prévu cette semaine ?",
             "Résume nos pense-bêtes en attente",
             "Une idée de cadeau pour \(identite.membre.autre.prenom) ?",
         ]
@@ -164,7 +165,7 @@ struct AssistantView: View {
             }
             Text(configuration.simulee
                  ? "Réponses simulées (debug)."
-                 : "Vos listes sont envoyées à \(configuration.destination) avec chaque question.")
+                 : "Vos listes, votre agenda, vos projets et vos demandes du mois sont envoyés à \(configuration.destination) avec chaque question.")
                 .font(.jubloLegende)
                 .foregroundStyle(.texteSecondaire)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -177,7 +178,8 @@ struct AssistantView: View {
     // MARK: - Actions
 
     private var consignes: String {
-        ContexteAssistant.consignes(pour: identite.membre, elements: elements)
+        // Lu au moment de la question : toujours à jour, sans observer six requêtes en continu.
+        ContexteAssistant.consignes(pour: identite.membre, donnees: .lire(dans: contexte))
     }
 
     private func envoyer(_ question: String) {

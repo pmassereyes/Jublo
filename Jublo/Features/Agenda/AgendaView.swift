@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -11,6 +12,7 @@ struct AgendaView: View {
     @State private var edition: EditionEvenement?
     @State private var voirPasses = false
     @State private var derniereSuppression: Evenement?
+    @AppStorage("agenda.astuceSiri") private var astuceSiri = true
 
     var body: some View {
         let maintenant = Date.now
@@ -18,6 +20,13 @@ struct AgendaView: View {
         let passes = evenements.filter { !$0.estAVenir(a: maintenant) }.reversed()
 
         List {
+            if astuceSiri {
+                // « Dis Siri, ajoute un rendez-vous dans Jublo » ; la croix la masque pour de bon.
+                SiriTipView(intent: AjouterRendezVous(), isVisible: $astuceSiri)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: Mesures.marge, bottom: 8, trailing: Mesures.marge))
+            }
             if aVenir.isEmpty {
                 ContentUnavailableView {
                     Label("Rien de prévu", systemImage: "calendar")
