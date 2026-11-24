@@ -292,6 +292,11 @@ Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFli
 (schéma V4). Build 52 (version 0.4) le même jour : Siri et assistant étendu (sans changement
 de schéma).
 
+**Un build TestFlight expire 90 jours après son envoi** : il ne s'ouvre plus, mais les
+données restent (sur l'iPhone et dans iCloud) et un build plus récent s'installe par-dessus.
+Le build 52 expire vers le **2027-02-22** : envoyer un nouveau build vers mi-février 2027
+(un commit suffit, le numéro de build étant le nombre de commits).
+
 ## Conventions
 
 - Code, noms et commentaires en français, comme le reste du projet.
