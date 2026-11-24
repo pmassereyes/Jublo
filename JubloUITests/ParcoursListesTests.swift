@@ -91,6 +91,30 @@ final class ParcoursListesTests: XCTestCase {
         capturer(app, "6-wishlist-moi")
     }
 
+    /// « + » garde le clavier pour enchaîner ; « OK » le ferme, pour pouvoir changer d'onglet.
+    @MainActor
+    func testOKFermeLeClavierEtPlusLeGarde() throws {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-baseEnMemoire", "-onglet", "listes", "-liste", "penseBete", "-membreCourant", "pablo",
+            "-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR",
+        ]
+        app.launch()
+
+        let champ = app.textFields.firstMatch
+        XCTAssertTrue(champ.waitForExistence(timeout: 5))
+        champ.tap()
+        champ.typeText("Pain")
+        app.buttons["Ajouter"].tap()
+        XCTAssertTrue(app.buttons["Pain"].waitForExistence(timeout: 2))
+        XCTAssertEqual(champ.value(forKey: "hasKeyboardFocus") as? Bool, true)
+
+        champ.typeText("Beurre\n")
+        XCTAssertTrue(app.buttons["Beurre"].waitForExistence(timeout: 2))
+        expectation(for: NSPredicate(format: "hasKeyboardFocus == false"), evaluatedWith: champ)
+        waitForExpectations(timeout: 2)
+    }
+
     @MainActor
     private func supprimer(_ ligne: XCUIElement, dans app: XCUIApplication) {
         ligne.swipeLeft()

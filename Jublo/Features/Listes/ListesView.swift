@@ -44,6 +44,7 @@ struct ListesView: View {
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.interactively)
         .scrollContentBackground(.hidden)
         .background(.fond)
         .refreshable { await synchronisation.synchroniserMaintenant() }
@@ -72,11 +73,11 @@ struct ListesView: View {
                 .foregroundStyle(.texte)
                 .submitLabel(.done)
                 .focused($saisieActive)
-                .onSubmit(ajouter)
+                .onSubmit { ajouter(garderClavier: false) }
                 .padding(.horizontal, Mesures.marge)
                 .frame(minHeight: Mesures.zoneTactile)
                 .background(.surface, in: .capsule)
-            Button(action: ajouter) {
+            Button { ajouter(garderClavier: true) } label: {
                 Image(systemName: "plus")
                     .accessibilityLabel("Ajouter")
             }
@@ -110,14 +111,14 @@ struct ListesView: View {
         }
     }
 
-    private func ajouter() {
+    /// « OK » au clavier ajoute puis ferme le clavier ; « + » le garde ouvert pour enchaîner.
+    private func ajouter(garderClavier: Bool) {
         withAnimation {
             if depot.ajouter(saisie, a: type, par: identite.membre, pour: destinataire) != nil {
                 saisie = ""
             }
         }
-        // On garde le clavier ouvert pour enchaîner les ajouts.
-        saisieActive = true
+        saisieActive = garderClavier
     }
 }
 
