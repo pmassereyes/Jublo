@@ -118,8 +118,125 @@ struct ContexteAssistantTests {
         banc = try Banc()
     }
 
+    private let calendrier: Calendar = {
+        var calendrier = Calendar(identifier: .gregorian)
+        calendrier.timeZone = .current
+        calendrier.locale = Locale(identifier: "fr_FR")
+        return calendrier
+    }()
+
     private func consignes(pour membre: Membre = .pablo) throws -> String {
-        try ContexteAssistant.consignes(pour: membre, elements: banc.tous(ElementListe.self), maintenant: banc.maintenant)
+        ContexteAssistant.consignes(
+            pour: membre, donnees: .lire(dans: banc.conteneur.mainContext),
+            maintenant: banc.maintenant, calendrier: calendrier
+        )
+    }
+
+    /// Une date de novembre 2026 (fuseau de l'appareil, comme les formats de l'app).
+    private func date(_ jour: Int, _ heure: Int = 0, _ minute: Int = 0, mois: Int = 11) throws -> Date {
+        try #require(calendrier.date(from: DateComponents(year: 2026, month: mois, day: jour, hour: heure, minute: minute)))
+    }
+
+    @Test func lAgendaEnvoieLAVenirEtLeMoisPasse() throws {
+        banc.maintenant = try date(24, 11)
+        _ = banc.depot.ajouterEvenement(
+            "Dîner chez Marc", debut: try date(25, 20), fin: try date(25, 22), lieu: "Belleville", pour: .julie, par: .pablo
+        )
+        _ = banc.depot.ajouterEvenement("Week-end à Lyon", debut: try date(28), fin: try date(29), journeeEntiere: true, par: .julie)
+        _ = banc.depot.ajouterEvenement("Dentiste", debut: try date(20, 9), par: .pablo)
+        _ = banc.depot.ajouterEvenement("Vieux rendez-vous", debut: try date(1, 9, mois: 9), par: .pablo)
+        let annule = try #require(banc.depot.ajouterEvenement("Annulé", debut: try date(26, 9), par: .pablo))
+        banc.depot.supprimer(annule, par: .pablo)
+
+        let texte = try consignes()
+
+        #expect(texte.contains("""
+            ## Agenda : à venir
+            - mercredi 25 novembre 2026 à 20:00–22:00 : Dîner chez Marc (pour Julie ; lieu : Belleville)
+            - du samedi 28 novembre 2026 au dimanche 29 novembre 2026 : Week-end à Lyon (pour vous deux)
+            """))
+        #expect(texte.contains("""
+            ## Agenda : passé (30 derniers jours)
+            - vendredi 20 novembre 2026 à 09:00 : Dentiste (pour vous deux)
+            """))
+        #expect(!texte.contains("Vieux rendez-vous"))
+        #expect(!texte.contains("Annulé"))
+    }
+
+    @Test func lesProjetsSontEnvoyes() throws {
+        let lisbonne = banc.depot.creerCagnotte("Lisbonne", objectifCentimes: 50_000, par: .pablo)
+        banc.depot.verser(12_050, dans: lisbonne, par: .pablo)
+        banc.depot.verser(3_000, dans: lisbonne, par: .julie)
+        banc.depot.annuler(banc.depot.verser(10_000, dans: lisbonne, par: .julie), par: .julie)
+
+        let corse = try #require(banc.depot.ajouterDestination("La Corse", quand: "été 2027", budgetCentimes: 120_000, par: .julie))
+        banc.depot.donnerAvis(5, sur: corse, par: .pablo)
+        let rome = try #require(banc.depot.ajouterDestination("Rome", par: .pablo))
+        banc.depot.changerStatut(.reservee, de: rome)
+
+        _ = banc.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, lieu: "Belleville", par: .julie)
+        let expo = try #require(banc.depot.ajouterSortie("Expo Hockney", categorie: .expo, par: .pablo))
+        banc.depot.basculerTestee(expo)
+        banc.depot.donnerAvis(4, sur: expo, par: .julie)
+
+        let texte = try consignes()
+        let m = Formats.montant
+
+        #expect(texte.contains(
+            "- Lisbonne : \(m(15_050)) de côté ; objectif \(m(50_000)) ; versé par Pablo : \(m(12_050)) ; versé par Julie : \(m(3_000))"
+        ))
+        #expect(texte.contains("""
+            ## Vacances envisagées
+            - La Corse (envisagée ; quand : été 2027 ; budget \(m(120_000)) ; envie : Pablo 5/5, Julie pas encore donné)
+            - Rome (réservée ; envie : Pablo pas encore donné, Julie pas encore donné)
+            """))
+        #expect(texte.contains("## Sorties à tester\n- Le Comptoir (restaurant ; repérée par Julie ; lieu : Belleville)"))
+        #expect(texte.contains("## Sorties déjà testées\n- Expo Hockney (expo ; testée le "))
+        #expect(texte.contains("avis : Pablo pas encore donné, Julie 4/5)"))
+    }
+
+    @Test func lesSouhaitsDuMoisSontEnvoyes() throws {
+        banc.maintenant = try date(5, 10, mois: 10)
+        let ancien = try #require(banc.depot.confierSouhait("me fasses un gâteau", par: .julie))
+        banc.maintenant = try date(24, 11)
+        banc.depot.basculerFait(ancien)
+        _ = banc.depot.confierSouhait("m'emmènes au cinéma", par: .pablo)
+
+        let texte = try consignes()
+
+        #expect(texte.contains("""
+            ## Ce mois-ci, j'aimerais que tu… (Novembre 2026)
+            - Pablo demande à Julie : « J'aimerais que tu m'emmènes au cinéma » (pas encore fait)
+            """))
+        #expect(texte.contains(
+            "- Julie demande à Pablo : « J'aimerais que tu me fasses un gâteau » (fait le mardi 24 novembre 2026) [Octobre 2026]"
+        ))
+    }
+
+    @Test func sansDonneesChaqueRubriqueLeDit() throws {
+        let texte = try consignes()
+
+        #expect(texte.contains("## Agenda : à venir\n(rien de prévu)"))
+        #expect(texte.contains("## Cagnottes\n(aucune)"))
+        #expect(texte.contains("## Vacances envisagées\n(aucune idée)"))
+        #expect(texte.contains("## Sorties à tester\n(aucune)"))
+        #expect(texte.contains("(aucune demande ce mois-ci)"))
+        #expect(!texte.contains("Agenda : passé"))
+    }
+
+    @Test func lesProjetsALaCorbeilleNeSontPasEnvoyes() throws {
+        let rome = try #require(banc.depot.ajouterDestination("Rome", par: .pablo))
+        banc.depot.supprimer(rome, par: .julie)
+        let comptoir = try #require(banc.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, par: .julie))
+        banc.depot.supprimer(comptoir, par: .pablo)
+        let cagnotte = banc.depot.creerCagnotte("Canapé", par: .pablo)
+        banc.depot.supprimer(cagnotte, par: .pablo)
+
+        let texte = try consignes()
+
+        #expect(!texte.contains("Rome"))
+        #expect(!texte.contains("Le Comptoir"))
+        #expect(!texte.contains("Canapé"))
     }
 
     @Test func lesConsignesDisentQuiParle() throws {
