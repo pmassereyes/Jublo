@@ -36,7 +36,12 @@ struct JubloApp: App {
         let depot = Depot(contexte: conteneur.mainContext)
         // Pas d'iCloud pendant les tests (base en mémoire, ou app hôte des tests unitaires).
         let sansSynchronisation = enMemoire || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-        let synchronisation = Synchronisation(contexte: conteneur.mainContext, active: !sansSynchronisation)
+        // Base en mémoire : l'état de synchronisation de l'iPhone n'est pas touché non plus (un build
+        // debug lancé ainsi pour préparer le schéma CloudKit ne change rien à la vraie base).
+        let stockageSync = enMemoire ? (UserDefaults(suiteName: "jublo-base-en-memoire") ?? .standard) : .standard
+        let synchronisation = Synchronisation(
+            contexte: conteneur.mainContext, stockage: stockageSync, active: !sansSynchronisation
+        )
         depot.observateur = synchronisation
         // Purge automatique de la corbeille au lancement (plus de 30 jours), une fois la
         // synchronisation branchée : les suppressions définitives partent aussi vers iCloud.

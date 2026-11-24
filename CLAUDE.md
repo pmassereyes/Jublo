@@ -6,13 +6,16 @@ que tu… », corbeille, puis un assistant IA local.
 
 ## Feuille de route
 
-- **Phase 1 (faite)** : app locale, SwiftData, Listes et Corbeille fonctionnelles. Les autres
-  fonctionnalités affichent un état « Bientôt » (`BientotDisponible`) : **jamais de données
-  d'exemple dans l'app** (Pablo n'en veut pas). `DonneesDebug` ne sert qu'aux aperçus et aux
-  tests d'interface.
+- **Phase 1 (faite)** : app locale, SwiftData, Listes et Corbeille fonctionnelles. **Jamais de
+  données d'exemple dans l'app** (Pablo n'en veut pas). `DonneesDebug` ne sert qu'aux aperçus,
+  aux captures et aux tests d'interface (`-exemples`).
 - **Phase 2 (code fait en novembre 2026, à valider sur les deux iPhones)** : synchronisation
   CloudKit entre les deux identifiants Apple via **CKSyncEngine** et une zone partagée en
   entier (CKShare de zone). Voir la section Synchronisation.
+- **Phase 4 (code fait le 2026-11-24, à valider sur les deux iPhones)** : le reste de l'app,
+  jusque-là en « Bientôt » (schéma V4). Agenda partagé (onglet Agenda), cagnotte, vacances
+  envisagées et sorties à tester (onglet Projets), « Ce mois-ci, j'aimerais que tu… » et
+  compteur de retards (onglet Nous), résumé à l'accueil.
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
   via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
   réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
@@ -46,8 +49,8 @@ Ne pas les casser :
 3. Chaque modèle a un `id: UUID` stable, futur nom d'enregistrement CloudKit.
 4. Contraintes compatibles CloudKit : toutes les propriétés sont optionnelles ou ont une valeur
    par défaut, aucun `@Attribute(.unique)`, relations optionnelles.
-5. Schéma versionné. `SchemaActuel` désigne la version courante (aujourd'hui `SchemaV2`), et
-   `PlanMigrationJublo` liste les versions et les étapes de migration. Toute évolution passe
+5. Schéma versionné. `SchemaActuel` désigne la version courante (aujourd'hui `SchemaV4`), et
+   `PlanMigrationJublo` liste les versions et les étapes de migration (dans `SchemaV4.swift`). Toute évolution passe
    par une nouvelle version : on copie le modèle modifié dans `SchemaVn`, on fige l'ancien, et
    on ajoute une étape et un test dans `MigrationTests`. Un modèle inchangé reste déclaré dans
    la dernière version où il a changé (`Cagnotte` et `Versement` sont dans `SchemaV1`).
@@ -68,6 +71,19 @@ Ne pas les casser :
   exclu du solde. Une cagnotte supprimée qui a des versements n'est jamais purgée
   (`estPurgeable`).
 - `Membre` (`pablo` / `julie`) est une énumération. `auteurId` stocke sa valeur brute.
+- **V4** (`Evenement`, `Destination`, `Sortie`, `Retard`, `Souhait`) : tous `Suppressible`,
+  écrits par `Depot` (`ajouterEvenement`, `ajouterDestination`, `ajouterSortie`, `noterRetard`,
+  `confierSouhait`…). Les formulaires d'édition passent par `Depot.modifier(_:_:)`, qui avance
+  `modifieLe` et signale le changement.
+- Agenda : `pourId` nil = « vous deux ». Un rendez-vous d'une journée entière reste à venir
+  jusqu'au soir (`estAVenir`).
+- Vacances et sorties : chacun note de 1 à 5 (`AvisDuCouple`), avec un champ par membre
+  (`avisPablo`, `avisJulie`) pour que l'un ne l'emporte pas sur l'avis de l'autre.
+- Souhait du mois : `mois` est une clé « 2026-11 » (`Souhait.cleMois`) ; l'auteur l'écrit, le
+  destinataire (l'autre) le coche (`faitLe`). Retard : `retardataireId` (qui était en retard)
+  est distinct d'`auteurId` (qui l'a noté) ; bilan mensuel dans `BilanRetards`.
+- SwiftData ne filtre pas sur une propriété atteinte à travers un protocole : les
+  `#Predicate` s'écrivent type par type (voir `MiroirLocal`, `Depot.elementsDansLaCorbeille`).
 - **Wish list par membre** : chaque envie a un destinataire (`pourId`, depuis la V2). Par
   défaut, c'est l'auteur ; on peut aussi noter une idée pour l'autre. Une envie sans
   `pourId`, créée avant la V2, est celle de son auteur (`destinataire`,
@@ -91,10 +107,15 @@ Ne pas les casser :
   locale.
 - Invitation : Nous › Partage › « Inviter Julie », via la feuille de partage d'iOS. Le lien
   ouvre Jublo, puis `DelegueScene` appelle `Synchronisation.accepter`.
-- **Ajouter un modèle synchronisé** : le rendre `Synchronisable`, l'ajouter à `MiroirLocal`
-  (`typesEnregistrement`, `fabriquer`, `modele`, `tousLesModeles`) et à `preparerSchema`,
-  puis **redéployer le schéma en production avant tout build TestFlight**. La production
-  refuse les champs et les types inconnus.
+- **Ajouter un modèle ou un champ synchronisé** : le rendre `Synchronisable`, l'ajouter à
+  `MiroirLocal` (`typesEnregistrement`, `fabriquer`, `modele`, `tousLesModeles`) et à
+  `preparerSchema` (chaque champ optionnel rempli, sinon il n'est pas créé), **augmenter
+  `Synchronisation.versionSchemaSync`**, puis **redéployer le schéma en production avant tout
+  build TestFlight**. La production refuse les champs et les types inconnus.
+- `versionSchemaSync` : un build plus ancien ignore les types qu'il ne connaît pas, mais le
+  jeton de CKSyncEngine avance quand même. Au premier lancement d'un build plus récent,
+  `Synchronisation` oublie donc l'état du moteur (en gardant rôle, métadonnées et changements
+  en attente) pour relire toute la zone et renvoyer toute la base.
 - Environnements : un build debug lancé depuis Xcode utilise l'environnement CloudKit de
   **développement**, TestFlight celui de **production**. Leurs données ne se croisent pas :
   pour tester le partage, les deux iPhones doivent être sur TestFlight.
@@ -103,19 +124,22 @@ Ne pas les casser :
   zéro (rôle de propriétaire, renvoi de toute la base), en gardant les données locales. Un
   partage accepté dans un environnement est donc perdu dans l'autre.
 - Déployer le schéma : lancer un build debug sur un iPhone connecté à iCloud (la connexion
-  à iCloud échoue dans les simulateurs iOS 27.0 et 27.2), puis Nous › Développement ›
-  « Préparer le schéma CloudKit ». Ensuite, dans la console CloudKit
+  à iCloud échoue dans les simulateurs iOS 27.0 et 27.2), **avec `-baseEnMemoire`** pour ne
+  toucher ni la vraie base ni l'état de synchronisation de l'iPhone, puis Nous ›
+  Développement › « Préparer le schéma CloudKit ». Sans cet argument, la base de l'iPhone
+  migre vers le schéma du build debug, et un build TestFlight plus ancien plante ensuite au
+  lancement. Ensuite, dans la console CloudKit
   (icloud.developer.apple.com), vérifier que le schéma de développement liste
   `ElementListe`, `Cagnotte`, `Versement` et `cloudkit.share` (sans ce dernier, la
   production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
-  Changes ». Dernier déploiement : 2026-11-24 (les 4 types ci-dessus).
+  Changes ». Déploiement du 2026-11-24 : les 4 types ci-dessus (V4 à déployer).
 - Build debug sur l'iPhone sans passer par l'interface d'Xcode (iPhone déverrouillé et
   branché, identifiant via `xcrun devicectl list devices`) :
   `xcodebuild -scheme Jublo -destination 'generic/platform=iOS' -derivedDataPath <dossier>
   -allowProvisioningUpdates build`, puis `xcrun devicectl device install app --device <id>
   <dossier>/Build/Products/Debug-iphoneos/Jublo.app` et `xcrun devicectl device process
-  launch --device <id> com.pmassereyes.jublo -- -onglet nous` (le `--` est obligatoire
-  avant les arguments de l'app).
+  launch --device <id> com.pmassereyes.jublo -- -baseEnMemoire -onglet nous` (le `--` est
+  obligatoire avant les arguments de l'app).
 - Tests : aucun appel à iCloud (`Synchronisation(active: false)` avec `-baseEnMemoire` ou
   dans l'app hôte des tests unitaires). Le partage réel se teste sur les deux iPhones.
 
@@ -135,7 +159,7 @@ Ne pas les casser :
   l'App Store, il faudra le déclarer dans la fiche de confidentialité et demander l'accord
   de l'utilisateur (règle 5.1.2 d'Apple).
 - Toute donnée ajoutée au contexte (agenda, cagnotte…) passe par `ContexteAssistant` et ses
-  tests.
+  tests. Aujourd'hui, l'assistant ne connaît que les listes.
 
 ## Libellés
 

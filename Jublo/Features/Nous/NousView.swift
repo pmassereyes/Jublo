@@ -14,16 +14,8 @@ struct NousView: View {
         Page {
             CartePartage()
 
-            BientotDisponible(
-                titre: "Compteur de retards",
-                symbole: "clock",
-                description: "Qui fait attendre l'autre, mois après mois."
-            )
-            BientotDisponible(
-                titre: "Ce mois-ci, j'aimerais que tu…",
-                symbole: "heart.text.square",
-                description: "Chaque mois, une envie confiée à l'autre."
-            )
+            CarteSouhaits()
+            CarteRetards()
 
             NavigationLink {
                 ReglagesAssistantView()
