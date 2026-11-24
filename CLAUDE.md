@@ -9,10 +9,10 @@ que tu… », corbeille, puis un assistant IA local.
 - **Phase 1 (faite)** : app locale, SwiftData, Listes et Corbeille fonctionnelles. **Jamais de
   données d'exemple dans l'app** (Pablo n'en veut pas). `DonneesDebug` ne sert qu'aux aperçus,
   aux captures et aux tests d'interface (`-exemples`).
-- **Phase 2 (code fait en novembre 2026, à valider sur les deux iPhones)** : synchronisation
+- **Phase 2 (faite, partage validé sur les deux iPhones le 2026-11-24 avec la 0.4)** : synchronisation
   CloudKit entre les deux identifiants Apple via **CKSyncEngine** et une zone partagée en
   entier (CKShare de zone). Voir la section Synchronisation.
-- **Phase 4 (code fait le 2026-11-24, à valider sur les deux iPhones)** : le reste de l'app,
+- **Phase 4 (faite le 2026-11-24, en service sur les deux iPhones avec la 0.4)** : le reste de l'app,
   jusque-là en « Bientôt » (schéma V4). Agenda partagé (onglet Agenda), cagnotte, vacances
   envisagées et sorties à tester (onglet Projets), « Ce mois-ci, j'aimerais que tu… » et
   compteur de retards (onglet Nous), résumé à l'accueil.
