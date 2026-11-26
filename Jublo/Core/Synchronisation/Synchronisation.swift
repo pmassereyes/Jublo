@@ -63,6 +63,11 @@ final class Synchronisation {
     @ObservationIgnored private let stockage: UserDefaults
     @ObservationIgnored private var moteur: CKSyncEngine?
     @ObservationIgnored private let demarreur = Demarreur()
+    /// Changements reçus de l'autre iPhone dans les listes et l'agenda (notifications).
+    @ObservationIgnored var surReception: (([ChangementRecu]) -> Void)?
+    /// Vrai tant que le moteur, parti sans état sauvegardé (premier partage, réinstallation,
+    /// nouveau schéma), n'a pas fini de relire la zone : rien n'est alors annoncé.
+    @ObservationIgnored private var lectureInitiale = false
 
     private enum Cle {
         static let role = "sync.role"
@@ -162,6 +167,9 @@ final class Synchronisation {
     private func synchroniser(_ moteur: CKSyncEngine) async {
         do {
             try await moteur.fetchChanges()
+            if moteur === self.moteur {
+                lectureInitiale = false
+            }
             try await moteur.sendChanges()
             if moteur === self.moteur {
                 etat = .aJour(.now)
@@ -195,6 +203,7 @@ final class Synchronisation {
         let base = role == .proprietaire ? conteneurCloudKit.privateCloudDatabase : conteneurCloudKit.sharedCloudDatabase
         let moteur = CKSyncEngine(CKSyncEngine.Configuration(database: base, stateSerialization: etatSauve, delegate: self))
         self.moteur = moteur
+        lectureInitiale = etatSauve == nil
         if etatSauve == nil {
             // Premier démarrage dans cette zone : on la crée (propriétaire) et on envoie toute la base.
             if role == .proprietaire {
@@ -434,7 +443,10 @@ extension Synchronisation: CKSyncEngineDelegate {
         if role == .proprietaire, let nouveauPartage = enregistrements.lazy.compactMap({ $0 as? CKShare }).first {
             partage = nouveauPartage
         }
-        miroir.appliquer(enregistrements, enAttente: enAttente)
+        let aAnnoncer = miroir.appliquer(enregistrements, enAttente: enAttente)
+        if !lectureInitiale, !aAnnoncer.isEmpty {
+            surReception?(aAnnoncer)
+        }
 
         let suppressions = changements.deletions.filter { $0.recordID.zoneID.zoneName == Self.nomZone }
         if suppressions.contains(where: { $0.recordType == CKRecord.SystemType.share }) {
