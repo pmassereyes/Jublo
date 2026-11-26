@@ -19,7 +19,7 @@ que tu… », corbeille, puis un assistant IA local.
 - **Phase 5 (code fait le 2026-11-24, version 0.4)** : raccourci Siri « Ajoute un rendez-vous
   dans Jublo » (voir la section Siri) et assistant étendu à l'agenda, aux projets et aux
   souhaits du mois. Aucun changement de schéma.
-- **Phase 6 (code fait le 2026-11-26, version 0.5, schéma V5)** : rappels en notification
+- **Phase 6 (build 64, version 0.5, envoyé le 2026-11-26, schéma V5)** : rappels en notification
   (pense-bête et agenda), notification chez l'autre (même app fermée) quand une liste ou
   l'agenda change, wish list « À offrir » / « Offert », cagnotte rattachée à un voyage. Voir
   la section Notifications.
@@ -159,7 +159,7 @@ Ne pas les casser :
   `Souhait`, les 8 types `Signal…Pour…` (`SignalPenseBetePourPablo`, `SignalCoursesPourJulie`…)
   et `cloudkit.share` (sans ce dernier, la production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
   Changes ». Déploiements du 2026-11-24 : les 3 types de la V3 et `cloudkit.share`,
-  puis les 5 types de la V4.
+  puis les 5 types de la V4. Le 2026-11-26 : les 3 champs de la V5 et les 8 types de signaux.
 - Build debug sur l'iPhone sans passer par l'interface d'Xcode (iPhone déverrouillé et
   branché, identifiant via `xcrun devicectl list devices`) :
   `xcodebuild -scheme Jublo -destination 'generic/platform=iOS' -derivedDataPath <dossier>
@@ -366,12 +366,12 @@ Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFli
 (version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit. Build 41
 (0.2) le même jour : clavier des listes. Build 46 (version 0.3) le même jour : l'app complète
 (schéma V4). Build 52 (version 0.4) le même jour : Siri et assistant étendu (sans changement
-de schéma). Version 0.5 (schéma V5, phase 6) : pas encore envoyée, schéma CloudKit à déployer
-d'abord.
+de schéma). Build 64 (version 0.5) le 2026-11-26 : rappels, notifications chez l'autre,
+wish list « offert », cagnotte d'un voyage (schéma V5, déployé en production le même jour).
 
 **Un build TestFlight expire 90 jours après son envoi** : il ne s'ouvre plus, mais les
 données restent (sur l'iPhone et dans iCloud) et un build plus récent s'installe par-dessus.
-Le build 52 expire vers le **2027-02-22** : envoyer un nouveau build vers mi-février 2027
+Le build 64 expire vers le **2027-02-24** : envoyer un nouveau build vers mi-février 2027
 (un commit suffit, le numéro de build étant le nombre de commits).
 
 ## Conventions
