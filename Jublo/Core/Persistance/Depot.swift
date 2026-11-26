@@ -7,6 +7,8 @@ import SwiftData
 protocol ObservateurChangements: AnyObject {
     func aModifie(_ modele: any Synchronisable)
     func aSupprime(_ modele: any Synchronisable)
+    /// Ce qu'une écriture a changé dans une liste ou l'agenda, pour prévenir l'autre (`Signaux`).
+    func aChange(_ changement: Changement)
 }
 
 /// Point d'entrée unique pour toutes les écritures locales.
@@ -40,18 +42,27 @@ final class Depot {
         contexte.insert(element)
         enregistrer()
         observateur?.aModifie(element)
+        signaler(EtatAvantChangement.ajout(element))
         return element
     }
 
     /// Coche ou décoche un élément, en retenant qui l'a coché.
     func basculer(_ element: ElementListe, par membre: Membre) {
         let maintenant = horloge()
+        let avant = EtatAvantChangement(element)
         element.estCoche.toggle()
         element.cocheLe = element.estCoche ? maintenant : nil
         element.cochePar = element.estCoche ? membre.rawValue : nil
         element.modifieLe = maintenant
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
+    }
+
+    /// Programme (ou retire, avec nil) le rappel d'un élément du pense-bête.
+    func programmerRappel(_ date: Date?, pour element: ElementListe) {
+        guard element.type == .penseBete || date == nil, element.rappelLe != date else { return }
+        modifier(element) { $0.rappelLe = date }
     }
 
     // MARK: - Cagnotte
@@ -93,7 +104,8 @@ final class Depot {
     @discardableResult
     func ajouterEvenement(
         _ titre: String, debut: Date, fin: Date? = nil, journeeEntiere: Bool = false,
-        lieu: String? = nil, note: String? = nil, pour concerne: Membre? = nil, par membre: Membre
+        lieu: String? = nil, note: String? = nil, pour concerne: Membre? = nil,
+        rappel: RappelEvenement? = nil, par membre: Membre
     ) -> Evenement? {
         guard let titre = Self.texte(titre) else { return nil }
         let evenement = Evenement(titre: titre, debut: debut, auteur: membre, le: horloge())
@@ -102,6 +114,7 @@ final class Depot {
         evenement.lieu = Self.texte(lieu)
         evenement.note = Self.texte(note)
         evenement.pourId = concerne?.rawValue
+        evenement.rappelBrut = rappel?.adapte(journeeEntiere: journeeEntiere).rawValue
         return inserer(evenement)
     }
 
@@ -122,6 +135,20 @@ final class Depot {
     func changerStatut(_ statut: StatutDestination, de destination: Destination) {
         guard destination.statut != statut else { return }
         modifier(destination) { $0.statutBrut = statut.rawValue }
+    }
+
+    /// Rattache une cagnotte à un voyage, ou l'en détache avec nil.
+    func rattacher(_ cagnotte: Cagnotte?, a destination: Destination) {
+        guard destination.cagnotteId != cagnotte?.id else { return }
+        modifier(destination) { $0.cagnotteId = cagnotte?.id }
+    }
+
+    /// Crée la cagnotte d'un voyage : son nom, et son budget pour objectif.
+    @discardableResult
+    func creerCagnotte(pour destination: Destination, par membre: Membre) -> Cagnotte {
+        let cagnotte = creerCagnotte(destination.nom, objectifCentimes: destination.budgetCentimes, par: membre)
+        rattacher(cagnotte, a: destination)
+        return cagnotte
     }
 
     // MARK: - Sorties à tester
@@ -188,10 +215,12 @@ final class Depot {
     /// Modifie un élément (formulaires d'édition, avis, statuts) : la date de modification
     /// avance, puis le changement est enregistré et envoyé.
     func modifier<Modele: Suppressible>(_ element: Modele, _ changement: (Modele) -> Void) {
+        let avant = EtatAvantChangement(element)
         changement(element)
         element.modifieLe = horloge()
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
     }
 
     /// Texte nettoyé de ses espaces, ou nil s'il est vide.
@@ -206,11 +235,13 @@ final class Depot {
     func supprimer(_ element: some Suppressible, par membre: Membre) {
         guard element.supprimeLe == nil else { return }
         let maintenant = horloge()
+        let avant = EtatAvantChangement(element)
         element.supprimeLe = maintenant
         element.supprimePar = membre.rawValue
         element.modifieLe = maintenant
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
     }
 
     /// Sort un élément de la corbeille.
@@ -275,7 +306,14 @@ final class Depot {
         contexte.insert(modele)
         enregistrer()
         observateur?.aModifie(modele)
+        signaler(EtatAvantChangement.ajout(modele))
         return modele
+    }
+
+    private func signaler(_ changement: Changement?) {
+        if let changement {
+            observateur?.aChange(changement)
+        }
     }
 
     private func lire<Modele: PersistentModel>(_ descripteur: FetchDescriptor<Modele>) -> [Modele] {

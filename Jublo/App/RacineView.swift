@@ -7,10 +7,12 @@ struct RacineView: View {
     }
 
     @Environment(Identite.self) private var identite
-    @State private var onglet = Onglet.initial
+    @Environment(Navigation.self) private var navigation
 
     var body: some View {
-        TabView(selection: $onglet) {
+        @Bindable var navigation = navigation
+
+        TabView(selection: $navigation.onglet) {
             NavigationStack { AccueilView() }
                 .tabItem { Label("Accueil", systemImage: "house") }
                 .tag(Onglet.accueil)
@@ -35,7 +37,7 @@ struct RacineView: View {
     }
 }
 
-private extension RacineView.Onglet {
+extension RacineView.Onglet {
     /// En debug, l'argument de lancement `-onglet listes` ouvre directement un onglet.
     static var initial: Self {
         #if DEBUG

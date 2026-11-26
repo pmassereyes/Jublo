@@ -26,6 +26,7 @@ extension ElementListe: Synchronisable {
         enregistrement["cocheLe"] = cocheLe
         enregistrement["cochePar"] = cochePar
         enregistrement["pourId"] = pourId
+        enregistrement["rappelLe"] = rappelLe
         enregistrement["auteurId"] = auteurId
         enregistrement["creeLe"] = creeLe
         enregistrement["modifieLe"] = modifieLe
@@ -40,6 +41,7 @@ extension ElementListe: Synchronisable {
         cocheLe = enregistrement["cocheLe"] as? Date
         cochePar = enregistrement["cochePar"] as? String
         pourId = enregistrement["pourId"] as? String
+        rappelLe = enregistrement["rappelLe"] as? Date
         auteurId = enregistrement["auteurId"] as? String ?? ""
         creeLe = enregistrement["creeLe"] as? Date ?? .now
         modifieLe = enregistrement["modifieLe"] as? Date ?? .now
@@ -108,6 +110,7 @@ extension Evenement: Synchronisable {
         enregistrement.encryptedValues["lieu"] = lieu
         enregistrement.encryptedValues["note"] = note
         enregistrement["pourId"] = pourId
+        enregistrement["rappelBrut"] = rappelBrut
         enregistrement.remplirSuppressible(self)
     }
 
@@ -119,6 +122,7 @@ extension Evenement: Synchronisable {
         lieu = enregistrement.encryptedValues["lieu"] as? String
         note = enregistrement.encryptedValues["note"] as? String
         pourId = enregistrement["pourId"] as? String
+        rappelBrut = enregistrement["rappelBrut"] as? String
         enregistrement.reprendreSuppressible(self)
     }
 }
@@ -134,6 +138,7 @@ extension Destination: Synchronisable {
         enregistrement["statutBrut"] = statutBrut
         enregistrement["avisPablo"] = avisPablo
         enregistrement["avisJulie"] = avisJulie
+        enregistrement["cagnotteId"] = cagnotteId?.uuidString
         enregistrement.remplirSuppressible(self)
     }
 
@@ -145,6 +150,7 @@ extension Destination: Synchronisable {
         statutBrut = enregistrement["statutBrut"] as? String ?? StatutDestination.envisagee.rawValue
         avisPablo = enregistrement["avisPablo"] as? Int
         avisJulie = enregistrement["avisJulie"] as? Int
+        cagnotteId = (enregistrement["cagnotteId"] as? String).flatMap(UUID.init(uuidString:))
         enregistrement.reprendreSuppressible(self)
     }
 }

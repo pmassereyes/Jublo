@@ -25,9 +25,18 @@ enum TypeListe: String, CaseIterable, Identifiable {
         case .wishList: "Ajouter à la wish list"
         }
     }
+
+    /// État d'un élément pas encore coché : « À faire », ou « À offrir » dans la wish list.
+    var libelleEnAttente: String { self == .wishList ? "À offrir" : "À faire" }
+
+    /// État d'un élément coché : « Fait », ou « Offert » dans la wish list.
+    var libelleTermine: String { self == .wishList ? "Offert" : "Fait" }
+
+    /// Début du détail d'un élément coché : « Coché par… », ou « Offert par… ».
+    var libelleCochePar: String { self == .wishList ? "Offert par" : "Coché par" }
 }
 
-extension SchemaV2 {
+extension SchemaV5 {
     /// Élément d'une liste : pense-bête, courses ou wish list.
     @Model
     final class ElementListe {
@@ -41,6 +50,9 @@ extension SchemaV2 {
         /// Wish list seulement : membre à qui l'envie est destinée.
         /// nil pour les autres listes, et pour les envies créées avant la V2 (voir `destinataire`).
         var pourId: String?
+        /// Pense-bête seulement : date du rappel, envoyé en notification sur les deux iPhones
+        /// tant que l'élément n'est ni coché ni à la corbeille (depuis la V5).
+        var rappelLe: Date?
 
         var auteurId: String = ""
         var creeLe: Date = Date.now

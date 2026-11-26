@@ -13,11 +13,13 @@ struct ListesView: View {
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Environment(Synchronisation.self) private var synchronisation
+    @Environment(Navigation.self) private var navigation
 
     @State private var type = TypeListe.initial
     @State private var cote = Cote.moi
     @State private var saisie = ""
     @State private var derniereSuppression: ElementListe?
+    @State private var rappel: ElementListe?
     @FocusState private var saisieActive: Bool
 
     var body: some View {
@@ -38,9 +40,11 @@ struct ListesView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 6, leading: Mesures.marge, bottom: 6, trailing: Mesures.marge))
 
-            ElementsDeListe(filtre: filtre) { element in
+            ElementsDeListe(type: type, filtre: filtre) { element in
                 depot.supprimer(element, par: identite.membre)
                 derniereSuppression = element
+            } programmerRappel: { element in
+                rappel = element
             }
         }
         .listStyle(.plain)
@@ -48,6 +52,9 @@ struct ListesView: View {
         .scrollContentBackground(.hidden)
         .background(.fond)
         .refreshable { await synchronisation.synchroniserMaintenant() }
+        .sheet(item: $rappel) { element in
+            FormulaireRappel(element: element)
+        }
         .navigationTitle("Listes")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +71,19 @@ struct ListesView: View {
         } annuler: { element in
             withAnimation { depot.restaurer(element) }
         }
+        // Liste demandée par une notification touchée.
+        .onAppear(perform: ouvrirListeDemandee)
+        .onChange(of: navigation.listeDemandee) { ouvrirListeDemandee() }
+    }
+
+    private func ouvrirListeDemandee() {
+        guard let demandee = navigation.listeDemandee else { return }
+        type = demandee
+        if navigation.enviesDeLAutre {
+            cote = .autre
+        }
+        navigation.listeDemandee = nil
+        navigation.enviesDeLAutre = false
     }
 
     private var champAjout: some View {
@@ -122,16 +142,23 @@ struct ListesView: View {
     }
 }
 
-/// Éléments d'une liste, « à faire » puis « fait ».
+/// Éléments d'une liste, « à faire » puis « fait » (« à offrir » puis « offert » dans la wish list).
 private struct ElementsDeListe: View {
+    let type: TypeListe
     let supprimer: (ElementListe) -> Void
+    let programmerRappel: (ElementListe) -> Void
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Query private var elements: [ElementListe]
 
-    init(filtre: Predicate<ElementListe>, supprimer: @escaping (ElementListe) -> Void) {
+    init(
+        type: TypeListe, filtre: Predicate<ElementListe>,
+        supprimer: @escaping (ElementListe) -> Void, programmerRappel: @escaping (ElementListe) -> Void
+    ) {
+        self.type = type
         self.supprimer = supprimer
+        self.programmerRappel = programmerRappel
         _elements = Query(filter: filtre, sort: \.creeLe, order: .reverse)
     }
 
@@ -150,10 +177,10 @@ private struct ElementsDeListe: View {
             .listRowSeparator(.hidden)
         }
         if !aFaire.isEmpty {
-            section(aFaire, titre: "À faire")
+            section(aFaire, titre: type.libelleEnAttente)
         }
         if !faits.isEmpty {
-            section(faits, titre: "Fait")
+            section(faits, titre: type.libelleTermine)
         }
     }
 
@@ -168,6 +195,26 @@ private struct ElementsDeListe: View {
                         withAnimation { supprimer(element) }
                     } label: {
                         Label("Corbeille", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .leading) {
+                    if peutAvoirUnRappel(element) {
+                        Button {
+                            programmerRappel(element)
+                        } label: {
+                            Label("Rappel", systemImage: "bell")
+                        }
+                        .tint(.commun)
+                    }
+                }
+                .contextMenu {
+                    if peutAvoirUnRappel(element) {
+                        Button(element.rappelLe == nil ? "Me le rappeler…" : "Modifier le rappel…", systemImage: "bell") {
+                            programmerRappel(element)
+                        }
+                    }
+                    Button("Mettre à la corbeille", systemImage: "trash", role: .destructive) {
+                        withAnimation { supprimer(element) }
                     }
                 }
                 .listRowBackground(
@@ -187,6 +234,11 @@ private struct ElementsDeListe: View {
         }
         .listSectionSeparator(.hidden)
     }
+
+    /// Seul le pense-bête a des rappels, et un élément fait n'en a plus besoin.
+    private func peutAvoirUnRappel(_ element: ElementListe) -> Bool {
+        element.type == .penseBete && !element.estCoche
+    }
 }
 
 /// Ligne d'un élément : toute la ligne coche ou décoche.
@@ -198,7 +250,7 @@ private struct LigneElement: View {
     var body: some View {
         Button(action: basculer) {
             HStack(spacing: Mesures.espacement) {
-                Image(systemName: element.estCoche ? "checkmark.circle.fill" : "circle")
+                Image(systemName: symbole)
                     .font(.system(size: 24))
                     .foregroundStyle(element.estCoche ? Color.texteSecondaire : element.auteur?.couleur ?? .commun)
                     .frame(width: Mesures.zoneTactile, height: Mesures.zoneTactile)
@@ -210,6 +262,11 @@ private struct LigneElement: View {
                     Text(detail)
                         .font(.jubloLegende)
                         .foregroundStyle(.texteSecondaire)
+                    if let rappel {
+                        Label(rappel, systemImage: "bell.fill")
+                            .font(.jubloLegende)
+                            .foregroundStyle(.texte)
+                    }
                 }
                 Spacer(minLength: 0)
                 PastilleMembre(membre: element.auteur, taille: 26)
@@ -218,13 +275,25 @@ private struct LigneElement: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(element.titre)
-        .accessibilityValue(element.estCoche ? "Fait" : "À faire")
-        .accessibilityHint(detail)
+        .accessibilityValue(element.estCoche ? element.type.libelleTermine : element.type.libelleEnAttente)
+        .accessibilityHint([detail, rappel.map { "Rappel \($0)" }].compactMap(\.self).joined(separator: ", "))
+    }
+
+    /// « Demain à 09:00 », pour un élément du pense-bête pas encore fait.
+    private var rappel: String? {
+        guard element.type == .penseBete, !element.estCoche, let date = element.rappelLe else { return nil }
+        return "\(Formats.jourProche(date)) à \(Formats.heure(date))"
+    }
+
+    /// Un cadeau pour une envie offerte, une coche ailleurs.
+    private var symbole: String {
+        guard element.estCoche else { return "circle" }
+        return element.type == .wishList ? "gift.circle.fill" : "checkmark.circle.fill"
     }
 
     private var detail: String {
         if element.estCoche, let cocheLe = element.cocheLe {
-            "Coché par \(Libelles.qui(element.cochePar, vuPar: courant)) · \(Formats.relatif(cocheLe))"
+            "\(element.type.libelleCochePar) \(Libelles.qui(element.cochePar, vuPar: courant)) · \(Formats.relatif(cocheLe))"
         } else {
             "Ajouté par \(Libelles.qui(element.auteurId, vuPar: courant)) · \(Formats.relatif(element.creeLe))"
         }

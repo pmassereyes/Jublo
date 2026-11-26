@@ -1,6 +1,7 @@
 import AppIntents
 import SwiftData
 import SwiftUI
+import UIKit
 
 @main
 struct JubloApp: App {
@@ -12,6 +13,8 @@ struct JubloApp: App {
     @State private var identite: Identite
     @State private var configurationAssistant: ConfigurationAssistant
     @State private var synchronisation: Synchronisation
+    @State private var notificateur: Notificateur
+    @State private var navigation = Navigation(courante: true)
 
     init() {
         Apparence.appliquer()
@@ -48,6 +51,18 @@ struct JubloApp: App {
         // synchronisation branchée : les suppressions définitives partent aussi vers iCloud.
         depot.purger()
         let identite = Identite()
+        // Rappels et réglages des notifications. Aucune notification pendant les tests.
+        let notificateur = Notificateur(
+            contexte: conteneur.mainContext,
+            identite: identite,
+            centre: sansSynchronisation ? CentreInerte() : CentreSysteme(),
+            courant: !sansSynchronisation
+        )
+        notificateur.ecouterLaBase()
+        // Les signaux envoyés à l'autre (« Pablo a mis à jour les courses ») sont signés par ce membre.
+        synchronisation.membreCourant = { [weak identite] in
+            identite?.estChoisi == true ? identite?.membre : nil
+        }
         // Raccourcis Siri : l'intention travaille sur la même base, le même membre et la même
         // synchronisation que l'app (voir `AjouterRendezVous`).
         AppDependencyManager.shared.add(dependency: depot)
@@ -57,6 +72,7 @@ struct JubloApp: App {
         _depot = State(initialValue: depot)
         _identite = State(initialValue: identite)
         _synchronisation = State(initialValue: synchronisation)
+        _notificateur = State(initialValue: notificateur)
         #if DEBUG
         // `-assistantSimule` : l'assistant répond sans fournisseur (captures, tests d'interface).
         let simulee = CommandLine.arguments.contains("-assistantSimule")
@@ -73,10 +89,34 @@ struct JubloApp: App {
                 .environment(identite)
                 .environment(configurationAssistant)
                 .environment(synchronisation)
+                .environment(notificateur)
+                .environment(navigation)
                 .task { await synchronisation.demarrer() }
+                // Une fois le membre choisi : demande d'autorisation (la première fois), puis rappels.
+                .task(id: identite.estChoisi) {
+                    guard identite.estChoisi else { return }
+                    await notificateur.demanderAutorisationSiBesoin()
+                    await notificateur.replanifier()
+                }
+                .onChange(of: identite.membre) { notificateur.planifierBientot() }
+                // Abonnements aux notifications iCloud de l'autre, selon Nous › Cet iPhone.
+                .task(id: notificateur.abonnementsVoulus) {
+                    guard let voulus = notificateur.abonnementsVoulus else { return }
+                    await synchronisation.abonner(voulus)
+                }
                 .onChange(of: phase) {
+                    if phase == .background {
+                        Task { await notificateur.replanifier() }
+                    }
                     if phase == .active {
-                        Task { await synchronisation.synchroniserMaintenant() }
+                        Task {
+                            await synchronisation.synchroniserMaintenant()
+                            await synchronisation.reessayerAbonnements()
+                        }
+                        Task {
+                            await notificateur.actualiserStatut()
+                            notificateur.planifierBientot()
+                        }
                     }
                 }
         }

@@ -253,13 +253,15 @@ struct ContexteAssistantTests {
         banc.depot.basculer(pain, par: .julie)
         banc.depot.ajouter("Céramique", a: .wishList, par: .pablo, pour: .julie)
         _ = try banc.ajouter("Vinyle", a: .wishList, par: .pablo)
+        let casque = try banc.ajouter("Casque", a: .wishList, par: .pablo)
+        banc.depot.basculer(casque, par: .julie)
 
         let texte = try consignes()
 
         #expect(texte.contains("## Courses\nÀ faire :\n- Lait (ajouté par Pablo)\nFait :\n- Pain (coché par Julie)"))
         #expect(texte.contains("## Pense-bête\n(vide)"))
-        #expect(texte.contains("## Wish list de Pablo\nÀ faire :\n- Vinyle (ajouté par Pablo)"))
-        #expect(texte.contains("## Wish list de Julie\nÀ faire :\n- Céramique (ajouté par Pablo)"))
+        #expect(texte.contains("## Wish list de Pablo\nÀ offrir :\n- Vinyle (ajouté par Pablo)\nOffert :\n- Casque (offert par Julie)"))
+        #expect(texte.contains("## Wish list de Julie\nÀ offrir :\n- Céramique (ajouté par Pablo)"))
     }
 
     @Test func laCorbeilleNEstPasEnvoyee() throws {

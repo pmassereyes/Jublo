@@ -8,6 +8,7 @@ struct VacancesView: View {
 
     @Query(filter: Destination.actives, sort: \Destination.creeLe, order: .reverse)
     private var destinations: [Destination]
+    @Query(filter: #Predicate<Cagnotte> { $0.supprimeLe == nil }) private var cagnottes: [Cagnotte]
     @State private var nouvelle = false
     @State private var derniereSuppression: Destination?
 
@@ -35,7 +36,7 @@ struct VacancesView: View {
                             NavigationLink {
                                 DestinationView(destination: destination)
                             } label: {
-                                LigneDestination(destination: destination)
+                                LigneDestination(destination: destination, cagnotte: destination.cagnotte(parmi: cagnottes))
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -84,6 +85,7 @@ struct VacancesView: View {
 
 private struct LigneDestination: View {
     let destination: Destination
+    let cagnotte: Cagnotte?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -109,19 +111,27 @@ private struct LigneDestination: View {
     }
 
     private var detail: String? {
-        let morceaux = [destination.quand, destination.budgetCentimes.map { "budget \(Formats.montant($0))" }].compactMap { $0 }
+        let morceaux = [
+            destination.quand,
+            destination.budgetCentimes.map { "budget \(Formats.montant($0))" },
+            cagnotte.map { "\(Formats.montant($0.soldeCentimes)) de côté" },
+        ].compactMap { $0 }
         return morceaux.isEmpty ? nil : morceaux.joined(separator: " · ")
     }
 }
 
-/// Détail d'une destination : envies de chacun, statut, infos et note.
+/// Détail d'une destination : envies de chacun, statut, cagnotte, infos et note.
 struct DestinationView: View {
     let destination: Destination
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Environment(\.dismiss) private var fermer
+    @Query(filter: #Predicate<Cagnotte> { $0.supprimeLe == nil }, sort: \Cagnotte.creeLe, order: .reverse)
+    private var cagnottes: [Cagnotte]
+    @Query(filter: Destination.actives) private var destinations: [Destination]
     @State private var modifier = false
+    @State private var verserDans: Cagnotte?
 
     var body: some View {
         Page {
@@ -143,6 +153,8 @@ struct DestinationView: View {
                 )
                 .overlay(Capsule().strokeBorder(Color.separateur))
             }
+
+            sectionCagnotte
 
             if destination.quand != nil || destination.budgetCentimes != nil || destination.note != nil {
                 Carte {
@@ -169,6 +181,11 @@ struct DestinationView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Modifier", systemImage: "pencil") { modifier = true }
+                    if destination.cagnotte(parmi: cagnottes) != nil {
+                        Button("Détacher la cagnotte", systemImage: "link") {
+                            depot.rattacher(nil, a: destination)
+                        }
+                    }
                     Button("Mettre à la corbeille", systemImage: "trash", role: .destructive) {
                         depot.supprimer(destination, par: identite.membre)
                         fermer()
@@ -182,6 +199,65 @@ struct DestinationView: View {
         .sheet(isPresented: $modifier) {
             FormulaireDestination(destination: destination)
         }
+        .sheet(item: $verserDans) { cagnotte in
+            FormulaireVersement(cagnotte: cagnotte)
+        }
+    }
+
+    /// La cagnotte du voyage, ou de quoi en créer une ou en rattacher une existante.
+    @ViewBuilder private var sectionCagnotte: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TitreSection(titre: "Cagnotte")
+            // Pas de lien vers le détail de la cagnotte : l'ouvrir d'ici faisait boucler SwiftUI
+            // (cause non identifiée, vu le 2026-11-26). On verse d'ici ; l'historique est dans
+            // Projets › Cagnotte.
+            if let cagnotte = destination.cagnotte(parmi: cagnottes) {
+                Carte {
+                    VStack(alignment: .leading, spacing: 10) {
+                        LigneCagnotte(cagnotte: cagnotte)
+                        Button {
+                            verserDans = cagnotte
+                        } label: {
+                            Label("Verser", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.pilule(.pleine(fond: identite.membre.couleur, texte: .surface)))
+                    }
+                }
+            } else {
+                Carte {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Mettez de côté pour ce voyage, à deux.")
+                            .font(.jubloLegende)
+                            .foregroundStyle(.texteSecondaire)
+                        Button {
+                            depot.creerCagnotte(pour: destination, par: identite.membre)
+                        } label: {
+                            Label("Créer une cagnotte", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.pilule)
+                        if !cagnottesLibres.isEmpty {
+                            Menu {
+                                ForEach(cagnottesLibres) { cagnotte in
+                                    Button(cagnotte.nom) { depot.rattacher(cagnotte, a: destination) }
+                                }
+                            } label: {
+                                Label("Rattacher une cagnotte existante", systemImage: "link")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.pilule(.contour))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Cagnottes qui ne sont pas déjà celles d'un autre voyage.
+    private var cagnottesLibres: [Cagnotte] {
+        let prises = Set(destinations.filter { $0.id != destination.id }.compactMap(\.cagnotteId))
+        return cagnottes.filter { !prises.contains($0.id) }
     }
 }
 

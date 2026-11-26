@@ -73,6 +73,15 @@ final class ParcoursListesTests: XCTestCase {
         mesEnvies.tap()
         mesEnvies.typeText("Platine vinyle\n")
         XCTAssertTrue(app.buttons["Platine vinyle"].waitForExistence(timeout: 2))
+        XCTAssertEqual(app.buttons["Platine vinyle"].value as? String, "À offrir")
+        XCTAssertTrue(app.staticTexts["À offrir"].exists)
+
+        // Une envie offerte passe dans « Offert »
+        app.buttons["Platine vinyle"].tap()
+        XCTAssertEqual(app.buttons["Platine vinyle"].value as? String, "Offert")
+        XCTAssertTrue(app.staticTexts["Offert"].waitForExistence(timeout: 2))
+        app.buttons["Platine vinyle"].tap()
+        XCTAssertEqual(app.buttons["Platine vinyle"].value as? String, "À offrir")
 
         // Une idée pour Julie
         app.buttons["Pour Julie"].tap()

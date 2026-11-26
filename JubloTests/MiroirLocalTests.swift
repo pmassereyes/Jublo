@@ -160,9 +160,11 @@ struct MiroirLocalTests {
 final class ObservateurEspion: ObservateurChangements {
     var modifies: [UUID] = []
     var supprimes: [UUID] = []
+    var changements: [Changement] = []
 
     func aModifie(_ modele: any Synchronisable) { modifies.append(modele.id) }
     func aSupprime(_ modele: any Synchronisable) { supprimes.append(modele.id) }
+    func aChange(_ changement: Changement) { changements.append(changement) }
 }
 
 @MainActor

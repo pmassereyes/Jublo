@@ -115,12 +115,18 @@ struct AccueilView: View {
                 .font(.jubloCorps)
                 .foregroundStyle(.texte)
             Spacer()
-            Text(nombre == 0 ? "rien en attente" : "\(nombre) en attente")
+            Text(resume(nombre, type: type))
                 .font(.jubloCorpsFort)
                 .foregroundStyle(nombre == 0 ? Color.texteSecondaire : Color.texte)
         }
         .frame(minHeight: Mesures.zoneTactile)
         .accessibilityElement(children: .combine)
+    }
+
+    /// « 3 en attente », ou « 3 à offrir » pour la wish list.
+    private func resume(_ nombre: Int, type: TypeListe) -> String {
+        let etat = type == .wishList ? "à offrir" : "en attente"
+        return nombre == 0 ? "rien \(etat)" : "\(nombre) \(etat)"
     }
 }
 
