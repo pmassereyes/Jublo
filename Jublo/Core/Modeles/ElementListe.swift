@@ -25,6 +25,15 @@ enum TypeListe: String, CaseIterable, Identifiable {
         case .wishList: "Ajouter à la wish list"
         }
     }
+
+    /// État d'un élément pas encore coché : « À faire », ou « À offrir » dans la wish list.
+    var libelleEnAttente: String { self == .wishList ? "À offrir" : "À faire" }
+
+    /// État d'un élément coché : « Fait », ou « Offert » dans la wish list.
+    var libelleTermine: String { self == .wishList ? "Offert" : "Fait" }
+
+    /// Début du détail d'un élément coché : « Coché par… », ou « Offert par… ».
+    var libelleCochePar: String { self == .wishList ? "Offert par" : "Coché par" }
 }
 
 extension SchemaV2 {

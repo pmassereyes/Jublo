@@ -57,27 +57,28 @@ enum ContexteAssistant {
     private static func listes(_ elements: [ElementListe], membre: Membre) -> [String] {
         var lignes: [String] = []
         for type in TypeListe.allCases where type != .wishList {
-            lignes += section(type.titre, elements.filter { $0.type == type })
+            lignes += section(type.titre, elements.filter { $0.type == type }, type: type)
         }
         for destinataire in [membre, membre.autre] {
             let envies = elements.filter { $0.type == .wishList && $0.destinataire == destinataire }
-            lignes += section("Wish list de \(destinataire.prenom)", envies)
+            lignes += section("Wish list de \(destinataire.prenom)", envies, type: .wishList)
         }
         return lignes
     }
 
-    private static func section(_ titre: String, _ elements: [ElementListe]) -> [String] {
+    /// « À faire » / « Fait », ou « À offrir » / « Offert » pour la wish list.
+    private static func section(_ titre: String, _ elements: [ElementListe], type: TypeListe) -> [String] {
         var lignes = ["", "## \(titre)"]
         guard !elements.isEmpty else { return lignes + ["(vide)"] }
         let aFaire = elements.filter { !$0.estCoche }.sorted { $0.creeLe > $1.creeLe }
         let faits = elements.filter(\.estCoche).sorted { ($0.cocheLe ?? $0.creeLe) > ($1.cocheLe ?? $1.creeLe) }
         if !aFaire.isEmpty {
-            lignes.append("À faire :")
+            lignes.append("\(type.libelleEnAttente) :")
             lignes += puces(aFaire) { "- \($0.titre) (ajouté par \(prenom($0.auteurId)))" }
         }
         if !faits.isEmpty {
-            lignes.append("Fait :")
-            lignes += puces(faits) { "- \($0.titre) (coché par \(prenom($0.cochePar)))" }
+            lignes.append("\(type.libelleTermine) :")
+            lignes += puces(faits) { "- \($0.titre) (\(type.libelleCochePar.lowercased()) \(prenom($0.cochePar)))" }
         }
         return lignes
     }

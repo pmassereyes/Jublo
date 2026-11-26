@@ -38,7 +38,7 @@ struct ListesView: View {
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 6, leading: Mesures.marge, bottom: 6, trailing: Mesures.marge))
 
-            ElementsDeListe(filtre: filtre) { element in
+            ElementsDeListe(type: type, filtre: filtre) { element in
                 depot.supprimer(element, par: identite.membre)
                 derniereSuppression = element
             }
@@ -122,15 +122,17 @@ struct ListesView: View {
     }
 }
 
-/// Éléments d'une liste, « à faire » puis « fait ».
+/// Éléments d'une liste, « à faire » puis « fait » (« à offrir » puis « offert » dans la wish list).
 private struct ElementsDeListe: View {
+    let type: TypeListe
     let supprimer: (ElementListe) -> Void
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Query private var elements: [ElementListe]
 
-    init(filtre: Predicate<ElementListe>, supprimer: @escaping (ElementListe) -> Void) {
+    init(type: TypeListe, filtre: Predicate<ElementListe>, supprimer: @escaping (ElementListe) -> Void) {
+        self.type = type
         self.supprimer = supprimer
         _elements = Query(filter: filtre, sort: \.creeLe, order: .reverse)
     }
@@ -150,10 +152,10 @@ private struct ElementsDeListe: View {
             .listRowSeparator(.hidden)
         }
         if !aFaire.isEmpty {
-            section(aFaire, titre: "À faire")
+            section(aFaire, titre: type.libelleEnAttente)
         }
         if !faits.isEmpty {
-            section(faits, titre: "Fait")
+            section(faits, titre: type.libelleTermine)
         }
     }
 
@@ -198,7 +200,7 @@ private struct LigneElement: View {
     var body: some View {
         Button(action: basculer) {
             HStack(spacing: Mesures.espacement) {
-                Image(systemName: element.estCoche ? "checkmark.circle.fill" : "circle")
+                Image(systemName: symbole)
                     .font(.system(size: 24))
                     .foregroundStyle(element.estCoche ? Color.texteSecondaire : element.auteur?.couleur ?? .commun)
                     .frame(width: Mesures.zoneTactile, height: Mesures.zoneTactile)
@@ -218,13 +220,19 @@ private struct LigneElement: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(element.titre)
-        .accessibilityValue(element.estCoche ? "Fait" : "À faire")
+        .accessibilityValue(element.estCoche ? element.type.libelleTermine : element.type.libelleEnAttente)
         .accessibilityHint(detail)
+    }
+
+    /// Un cadeau pour une envie offerte, une coche ailleurs.
+    private var symbole: String {
+        guard element.estCoche else { return "circle" }
+        return element.type == .wishList ? "gift.circle.fill" : "checkmark.circle.fill"
     }
 
     private var detail: String {
         if element.estCoche, let cocheLe = element.cocheLe {
-            "Coché par \(Libelles.qui(element.cochePar, vuPar: courant)) · \(Formats.relatif(cocheLe))"
+            "\(element.type.libelleCochePar) \(Libelles.qui(element.cochePar, vuPar: courant)) · \(Formats.relatif(cocheLe))"
         } else {
             "Ajouté par \(Libelles.qui(element.auteurId, vuPar: courant)) · \(Formats.relatif(element.creeLe))"
         }
