@@ -77,7 +77,8 @@ final class Synchronisation {
     /// CKSyncEngine avance quand même : au premier lancement d'un build plus récent, on relit
     /// donc toute la zone (voir `relireSiSchemaPlusRecent`).
     /// 1 : listes et cagnotte (build 38). 2 : agenda, vacances, sorties, retards, souhaits.
-    static let versionSchemaSync = 2
+    /// 3 : rappels (`ElementListe.rappelLe`, `Evenement.rappelBrut`).
+    static let versionSchemaSync = 3
 
     /// Environnement CloudKit de ce build : un build debug lancé depuis Xcode parle à
     /// l'environnement de développement, TestFlight à celui de production.
@@ -537,6 +538,7 @@ extension Synchronisation {
         element.estCoche = true
         element.cocheLe = date
         element.cochePar = Membre.julie.rawValue
+        element.rappelLe = date
         element.supprimeLe = date
         element.supprimePar = Membre.pablo.rawValue
         let cagnotte = Cagnotte(nom: "Schéma", objectifCentimes: 100, auteur: .pablo, le: date)
@@ -552,6 +554,7 @@ extension Synchronisation {
         evenement.lieu = "Schéma"
         evenement.note = "Schéma"
         evenement.pourId = Membre.julie.rawValue
+        evenement.rappelBrut = RappelEvenement.uneHeure.rawValue
         evenement.supprimeLe = date
         evenement.supprimePar = Membre.pablo.rawValue
         let destination = Destination(nom: "Schéma", auteur: .pablo, le: date)

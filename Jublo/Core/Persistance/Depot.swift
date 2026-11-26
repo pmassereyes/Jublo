@@ -54,6 +54,12 @@ final class Depot {
         observateur?.aModifie(element)
     }
 
+    /// Programme (ou retire, avec nil) le rappel d'un élément du pense-bête.
+    func programmerRappel(_ date: Date?, pour element: ElementListe) {
+        guard element.type == .penseBete || date == nil, element.rappelLe != date else { return }
+        modifier(element) { $0.rappelLe = date }
+    }
+
     // MARK: - Cagnotte
 
     @discardableResult
@@ -93,7 +99,8 @@ final class Depot {
     @discardableResult
     func ajouterEvenement(
         _ titre: String, debut: Date, fin: Date? = nil, journeeEntiere: Bool = false,
-        lieu: String? = nil, note: String? = nil, pour concerne: Membre? = nil, par membre: Membre
+        lieu: String? = nil, note: String? = nil, pour concerne: Membre? = nil,
+        rappel: RappelEvenement? = nil, par membre: Membre
     ) -> Evenement? {
         guard let titre = Self.texte(titre) else { return nil }
         let evenement = Evenement(titre: titre, debut: debut, auteur: membre, le: horloge())
@@ -102,6 +109,7 @@ final class Depot {
         evenement.lieu = Self.texte(lieu)
         evenement.note = Self.texte(note)
         evenement.pourId = concerne?.rawValue
+        evenement.rappelBrut = rappel?.adapte(journeeEntiere: journeeEntiere).rawValue
         return inserer(evenement)
     }
 

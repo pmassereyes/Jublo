@@ -1,6 +1,7 @@
+import Foundation
 import SwiftData
 
-/// Version 4 : agenda, vacances envisagées, sorties à tester, retards et souhaits du mois.
+/// Version 4 (figée) : agenda, vacances envisagées, sorties à tester, retards et souhaits du mois.
 /// Les modèles existants sont inchangés et restent déclarés dans leur version.
 ///
 /// Contraintes CloudKit : propriétés optionnelles ou avec valeur par défaut, pas de
@@ -17,29 +18,31 @@ enum SchemaV4: VersionedSchema {
     }
 }
 
-/// Version courante du schéma, ouverte par `Persistance`.
-typealias SchemaActuel = SchemaV4
+extension SchemaV4 {
+    /// Rendez-vous tel qu'en V4 (sans rappel).
+    @Model
+    final class Evenement {
+        var id: UUID = UUID()
+        var titre: String = ""
+        var debut: Date = Date.now
+        var fin: Date?
+        var journeeEntiere: Bool = false
+        var lieu: String?
+        var note: String?
+        var pourId: String?
 
-enum PlanMigrationJublo: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self, SchemaV2.self, SchemaV3.self, SchemaV4.self]
-    }
+        var auteurId: String = ""
+        var creeLe: Date = Date.now
+        var modifieLe: Date = Date.now
+        var supprimeLe: Date?
+        var supprimePar: String?
 
-    static var stages: [MigrationStage] {
-        [
-            .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self),
-            .lightweight(fromVersion: SchemaV2.self, toVersion: SchemaV3.self),
-            .lightweight(fromVersion: SchemaV3.self, toVersion: SchemaV4.self),
-        ]
+        init(titre: String, debut: Date, auteur: Membre, le date: Date) {
+            self.titre = titre
+            self.debut = debut
+            auteurId = auteur.rawValue
+            creeLe = date
+            modifieLe = date
+        }
     }
 }
-
-typealias ElementListe = SchemaV2.ElementListe
-typealias Cagnotte = SchemaV1.Cagnotte
-typealias Versement = SchemaV1.Versement
-typealias MetadonneesSync = SchemaV3.MetadonneesSync
-typealias Evenement = SchemaV4.Evenement
-typealias Destination = SchemaV4.Destination
-typealias Sortie = SchemaV4.Sortie
-typealias Retard = SchemaV4.Retard
-typealias Souhait = SchemaV4.Souhait
