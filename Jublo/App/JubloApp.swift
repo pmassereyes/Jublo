@@ -51,18 +51,18 @@ struct JubloApp: App {
         // synchronisation branchée : les suppressions définitives partent aussi vers iCloud.
         depot.purger()
         let identite = Identite()
-        // Rappels et annonces des changements de l'autre. Aucune notification pendant les tests.
+        // Rappels et réglages des notifications. Aucune notification pendant les tests.
         let notificateur = Notificateur(
             contexte: conteneur.mainContext,
             identite: identite,
             centre: sansSynchronisation ? CentreInerte() : CentreSysteme(),
-            estAuPremierPlan: { UIApplication.shared.applicationState == .active },
             courant: !sansSynchronisation
         )
-        synchronisation.surReception = { [weak notificateur] changements in
-            notificateur?.annoncer(changements)
-        }
         notificateur.ecouterLaBase()
+        // Les signaux envoyés à l'autre (« Pablo a mis à jour les courses ») sont signés par ce membre.
+        synchronisation.membreCourant = { [weak identite] in
+            identite?.estChoisi == true ? identite?.membre : nil
+        }
         // Raccourcis Siri : l'intention travaille sur la même base, le même membre et la même
         // synchronisation que l'app (voir `AjouterRendezVous`).
         AppDependencyManager.shared.add(dependency: depot)
@@ -99,6 +99,11 @@ struct JubloApp: App {
                     await notificateur.replanifier()
                 }
                 .onChange(of: identite.membre) { notificateur.planifierBientot() }
+                // Abonnements aux notifications iCloud de l'autre, selon Nous › Cet iPhone.
+                .task(id: notificateur.abonnementsVoulus) {
+                    guard let voulus = notificateur.abonnementsVoulus else { return }
+                    await synchronisation.abonner(voulus)
+                }
                 .onChange(of: phase) {
                     if phase == .background {
                         Task { await notificateur.replanifier() }

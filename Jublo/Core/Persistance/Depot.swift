@@ -7,6 +7,8 @@ import SwiftData
 protocol ObservateurChangements: AnyObject {
     func aModifie(_ modele: any Synchronisable)
     func aSupprime(_ modele: any Synchronisable)
+    /// Ce qu'une écriture a changé dans une liste ou l'agenda, pour prévenir l'autre (`Signaux`).
+    func aChange(_ changement: Changement)
 }
 
 /// Point d'entrée unique pour toutes les écritures locales.
@@ -40,18 +42,21 @@ final class Depot {
         contexte.insert(element)
         enregistrer()
         observateur?.aModifie(element)
+        signaler(EtatAvantChangement.ajout(element))
         return element
     }
 
     /// Coche ou décoche un élément, en retenant qui l'a coché.
     func basculer(_ element: ElementListe, par membre: Membre) {
         let maintenant = horloge()
+        let avant = EtatAvantChangement(element)
         element.estCoche.toggle()
         element.cocheLe = element.estCoche ? maintenant : nil
         element.cochePar = element.estCoche ? membre.rawValue : nil
         element.modifieLe = maintenant
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
     }
 
     /// Programme (ou retire, avec nil) le rappel d'un élément du pense-bête.
@@ -210,10 +215,12 @@ final class Depot {
     /// Modifie un élément (formulaires d'édition, avis, statuts) : la date de modification
     /// avance, puis le changement est enregistré et envoyé.
     func modifier<Modele: Suppressible>(_ element: Modele, _ changement: (Modele) -> Void) {
+        let avant = EtatAvantChangement(element)
         changement(element)
         element.modifieLe = horloge()
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
     }
 
     /// Texte nettoyé de ses espaces, ou nil s'il est vide.
@@ -228,11 +235,13 @@ final class Depot {
     func supprimer(_ element: some Suppressible, par membre: Membre) {
         guard element.supprimeLe == nil else { return }
         let maintenant = horloge()
+        let avant = EtatAvantChangement(element)
         element.supprimeLe = maintenant
         element.supprimePar = membre.rawValue
         element.modifieLe = maintenant
         enregistrer()
         observateur?.aModifie(element)
+        signaler(avant?.changement(vers: element))
     }
 
     /// Sort un élément de la corbeille.
@@ -297,7 +306,14 @@ final class Depot {
         contexte.insert(modele)
         enregistrer()
         observateur?.aModifie(modele)
+        signaler(EtatAvantChangement.ajout(modele))
         return modele
+    }
+
+    private func signaler(_ changement: Changement?) {
+        if let changement {
+            observateur?.aChange(changement)
+        }
     }
 
     private func lire<Modele: PersistentModel>(_ descripteur: FetchDescriptor<Modele>) -> [Modele] {

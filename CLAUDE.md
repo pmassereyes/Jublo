@@ -20,8 +20,9 @@ que tu… », corbeille, puis un assistant IA local.
   dans Jublo » (voir la section Siri) et assistant étendu à l'agenda, aux projets et aux
   souhaits du mois. Aucun changement de schéma.
 - **Phase 6 (code fait le 2026-11-26, version 0.5, schéma V5)** : rappels en notification
-  (pense-bête et agenda), notification chez l'autre quand une liste ou l'agenda change, wish
-  list « À offrir » / « Offert », cagnotte rattachée à un voyage. Voir la section Notifications.
+  (pense-bête et agenda), notification chez l'autre (même app fermée) quand une liste ou
+  l'agenda change, wish list « À offrir » / « Offert », cagnotte rattachée à un voyage. Voir
+  la section Notifications.
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
   via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
   réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
@@ -128,8 +129,9 @@ Ne pas les casser :
 - Invitation : Nous › Partage › « Inviter Julie », via la feuille de partage d'iOS. Le lien
   ouvre Jublo, puis `DelegueScene` appelle `Synchronisation.accepter`.
 - Champs ajoutés par la V5 (`versionSchemaSync` 3) : `ElementListe.rappelLe`,
-  `Evenement.rappelBrut`, `Destination.cagnotteId`. **À déployer en production avant le
-  premier build TestFlight de la 0.5.**
+  `Evenement.rappelBrut`, `Destination.cagnotteId`, plus les 8 types de signaux (champs `le`
+  et `par`, voir Notifications). **À déployer en production avant le premier build
+  TestFlight de la 0.5.**
 - **Ajouter un modèle ou un champ synchronisé** : le rendre `Synchronisable`, l'ajouter à
   `MiroirLocal` (`typesEnregistrement`, `fabriquer`, `modele`, `tousLesModeles`) et à
   `preparerSchema` (chaque champ optionnel rempli, sinon il n'est pas créé), **augmenter
@@ -154,7 +156,8 @@ Ne pas les casser :
   lancement. Ensuite, dans la console CloudKit
   (icloud.developer.apple.com), vérifier que le schéma de développement liste
   `ElementListe`, `Cagnotte`, `Versement`, `Evenement`, `Destination`, `Sortie`, `Retard`,
-  `Souhait` et `cloudkit.share` (sans ce dernier, la production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
+  `Souhait`, les 8 types `Signal…Pour…` (`SignalPenseBetePourPablo`, `SignalCoursesPourJulie`…)
+  et `cloudkit.share` (sans ce dernier, la production refuse le premier partage), puis conteneur Jublo › Schema › « Deploy Schema
   Changes ». Déploiements du 2026-11-24 : les 3 types de la V3 et `cloudkit.share`,
   puis les 5 types de la V4.
 - Build debug sur l'iPhone sans passer par l'interface d'Xcode (iPhone déverrouillé et
@@ -191,7 +194,7 @@ Ne pas les casser :
 ## Notifications
 
 - `Core/Notifications/` : `Notificateur` (une instance, dans l'environnement), `Rappels`,
-  `Annonces`, et `CentreNotifications` (protocole : `CentreSysteme` pour
+  `Signaux`, `Changement`, et `CentreNotifications` (protocole : `CentreSysteme` pour
   `UNUserNotificationCenter`, `CentreInerte` avec `-baseEnMemoire`, dans les tests et les
   aperçus). L'autorisation est demandée une fois le membre choisi, au lancement.
 - **Rappels** : `Notificateur.replanifier()` lit la base et met les notifications programmées
@@ -202,22 +205,35 @@ Ne pas les casser :
   appels servent de filet). Pense-bête : sur les deux
   iPhones, sauf élément coché ou à la corbeille. Rendez-vous : chez le membre concerné, ou
   chez les deux (`Evenement.estPour`). 60 au plus (iOS en garde 64).
-- **Annonces** (« Julie a ajouté « Lait » ») : `MiroirLocal.appliquer` renvoie les
-  `ChangementRecu` (élément ou rendez-vous inconnu ici, ou version reçue strictement plus
-  récente) ; `Synchronisation.surReception` les passe à `Notificateur.annoncer`, qui en fait
-  une notification par liste et par nature (`Annonces`). Rien pendant la relecture initiale
-  d'une zone (`lectureInitiale` : moteur parti sans état, nouveau `versionSchemaSync`), rien
-  au premier plan, rien de plus de 24 h, ni ses propres changements, ni les suppressions dans
-  les listes, ni les rendez-vous passés. Wish list : seules les envies que l'autre ajoute pour
-  lui-même (une idée pour toi ou un cadeau offert gâcheraient la surprise). Un changement de
-  rappel seul n'est pas annoncé. Réglages par iPhone dans Nous › Cet iPhone
-  (`notifications.listes`, `notifications.agenda`).
-- **Réveil** : CloudKit envoie une notification push silencieuse ;
-  `DelegueApplication.application(_:didReceiveRemoteNotification:)` synchronise (20 s au
-  plus), attend l'envoi des annonces et reprogramme les rappels. iOS limite ces réveils et ne
-  les fait pas pour une app fermée depuis le sélecteur d'apps : l'annonce peut arriver en
-  retard, ou seulement à la prochaine ouverture (sans notification, l'app étant au premier
-  plan). Ça ne se teste que sur les deux iPhones, avec TestFlight.
+- **Notifications chez l'autre, même Jublo fermé** (« Julie a mis à jour les courses »),
+  comme Notes, mais sans serveur à nous : ce sont des **push visibles envoyés par iCloud**.
+  - Envoi : `Depot` signale chaque `Changement` d'une liste ou de l'agenda
+    (`ObservateurChangements.aChange`). `Synchronisation` en tire une rubrique
+    (`Signaux.rubrique`), envoie d'abord les données, puis réécrit un **signal** : un
+    enregistrement à nom fixe (`signal-courses-julie`) de type `SignalCoursesPourJulie`, dans
+    la zone partagée, jamais supprimé (une suppression notifierait aussi). Un signal par
+    rubrique toutes les 10 minutes au plus (`CadenceSignaux`), seulement si le partage est
+    actif.
+  - Réception : chaque iPhone s'abonne (`CKDatabaseSubscription`, filtrée sur le type
+    `Signal…Pour<son prénom>`, dans la base de son rôle) avec un texte fixé à l'abonnement.
+    iCloud affiche la notification sans réveiller Jublo. Le destinataire fait partie du type :
+    on ne reçoit jamais ses propres signaux. Abonnements selon Nous › Cet iPhone
+    (`notifications.listes`, `notifications.agenda`, `Notificateur.abonnementsVoulus`),
+    réenregistrés quand l'empreinte change (`sync.abonnements`, oubliée au changement de rôle
+    ou d'environnement).
+  - Règles : ni les suppressions dans les listes, ni les rendez-vous passés, ni un changement
+    de rappel seul. Wish list : seulement une envie que l'auteur ajoute pour lui-même (une
+    idée pour l'autre ou un cadeau offert gâcheraient la surprise).
+  - Les titres ne passent jamais en clair : le texte ne dit pas quel élément a changé.
+    `MiroirLocal` ignore les signaux (type inconnu, nom qui n'est pas un UUID).
+  - Au premier plan, la notification n'est pas affichée (`willPresent`).
+  - Non vérifié sur iPhone à l'écriture (2026-11-26) : à tester sur les deux iPhones en
+    TestFlight. Si la base partagée ignorait le filtre par type, Julie recevrait une
+    notification par enregistrement : couper les deux réglages supprime les abonnements.
+- **Réveil** : CloudKit envoie aussi une notification push silencieuse (celle de
+  CKSyncEngine) ; `DelegueApplication.application(_:didReceiveRemoteNotification:)`
+  synchronise (20 s au plus) puis reprogramme les rappels. iOS limite ces réveils, et ne les
+  fait pas pour une app fermée depuis le sélecteur d'apps.
 - Toucher une notification ouvre l'onglet (et la liste) concerné : `Navigation`, dans
   l'environnement, porte l'onglet de `RacineView` et la liste demandée à `ListesView`.
 

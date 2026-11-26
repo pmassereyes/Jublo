@@ -11,8 +11,8 @@ final class Navigation {
     var onglet: RacineView.Onglet
     /// Liste à ouvrir dans l'onglet Listes ; `ListesView` la prend puis la remet à nil.
     var listeDemandee: TypeListe?
-    /// Wish list : membre dont il faut montrer les envies.
-    var enviesDemandeesPour: Membre?
+    /// Wish list : montrer les envies de l'autre plutôt que les siennes.
+    var enviesDeLAutre = false
 
     init(onglet: RacineView.Onglet = .initial, courante: Bool = false) {
         self.onglet = onglet
@@ -26,7 +26,7 @@ final class Navigation {
         if let onglet = infos["onglet"].flatMap(RacineView.Onglet.init(rawValue:)) {
             self.onglet = onglet
         }
-        enviesDemandeesPour = infos["pour"].flatMap(Membre.init(rawValue:))
+        enviesDeLAutre = infos["envies"] == "autre"
         listeDemandee = infos["liste"].flatMap(TypeListe.init(rawValue:))
     }
 }

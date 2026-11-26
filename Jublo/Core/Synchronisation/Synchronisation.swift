@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import OSLog
 import SwiftData
+import UIKit
 
 /// Synchronisation CloudKit avec CKSyncEngine.
 ///
@@ -63,11 +64,17 @@ final class Synchronisation {
     @ObservationIgnored private let stockage: UserDefaults
     @ObservationIgnored private var moteur: CKSyncEngine?
     @ObservationIgnored private let demarreur = Demarreur()
-    /// Changements reçus de l'autre iPhone dans les listes et l'agenda (notifications).
-    @ObservationIgnored var surReception: (([ChangementRecu]) -> Void)?
-    /// Vrai tant que le moteur, parti sans état sauvegardé (premier partage, réinstallation,
-    /// nouveau schéma), n'a pas fini de relire la zone : rien n'est alors annoncé.
-    @ObservationIgnored private var lectureInitiale = false
+    /// Membre de cet iPhone, nil tant qu'il n'est pas choisi : signe les signaux envoyés à l'autre.
+    @ObservationIgnored var membreCourant: @MainActor () -> Membre? = { nil }
+    @ObservationIgnored private var cadence = CadenceSignaux()
+    @ObservationIgnored private var signauxEnCours: [Task<Void, Never>] = []
+    @ObservationIgnored private var abonnementsVoulus: AbonnementsVoulus?
+
+    /// Signaux de l'autre auxquels cet iPhone s'abonne (réglages de Nous › Cet iPhone).
+    struct AbonnementsVoulus: Equatable {
+        let membre: Membre
+        let rubriques: Set<RubriqueSignal>
+    }
 
     private enum Cle {
         static let role = "sync.role"
@@ -75,6 +82,8 @@ final class Synchronisation {
         static let enAttente = "sync.enAttente"
         static let environnement = "sync.environnement"
         static let versionSchema = "sync.versionSchema"
+        /// Empreinte des abonnements aux signaux déjà enregistrés sur iCloud.
+        static let abonnements = "sync.abonnements"
     }
 
     /// Version des types et des champs synchronisés : à augmenter à chaque type ou champ
@@ -160,7 +169,10 @@ final class Synchronisation {
     /// La synchronisation continue ensuite tant que l'app tourne.
     func synchroniser(auPlus delai: Duration) async {
         guard active else { return }
-        await Attente.auPlus(delai) { await self.synchroniserMaintenant() }
+        await Attente.auPlus(delai) {
+            await self.synchroniserMaintenant()
+            await self.terminerSignaux()
+        }
     }
 
     /// Récupère puis envoie les changements d'un moteur, sans jamais rien démarrer : le
@@ -168,9 +180,6 @@ final class Synchronisation {
     private func synchroniser(_ moteur: CKSyncEngine) async {
         do {
             try await moteur.fetchChanges()
-            if moteur === self.moteur {
-                lectureInitiale = false
-            }
             try await moteur.sendChanges()
             if moteur === self.moteur {
                 etat = .aJour(.now)
@@ -204,7 +213,6 @@ final class Synchronisation {
         let base = role == .proprietaire ? conteneurCloudKit.privateCloudDatabase : conteneurCloudKit.sharedCloudDatabase
         let moteur = CKSyncEngine(CKSyncEngine.Configuration(database: base, stateSerialization: etatSauve, delegate: self))
         self.moteur = moteur
-        lectureInitiale = etatSauve == nil
         if etatSauve == nil {
             // Premier démarrage dans cette zone : on la crée (propriétaire) et on envoie toute la base.
             if role == .proprietaire {
@@ -219,6 +227,7 @@ final class Synchronisation {
             partage = existant
         }
         await synchroniser(moteur)
+        await appliquerAbonnements()
     }
 
     // MARK: - Partage
@@ -294,6 +303,7 @@ final class Synchronisation {
         moteur = nil
         stockage.removeObject(forKey: Cle.etatMoteur)
         stockage.removeObject(forKey: Cle.enAttente)
+        stockage.removeObject(forKey: Cle.abonnements)
         miroir.oublierTout()
         partage = nil
         role = nouveau
@@ -309,7 +319,7 @@ final class Synchronisation {
         let precedent = stockage.string(forKey: Cle.environnement)
             ?? (stockage.data(forKey: Cle.etatMoteur) != nil ? "developpement" : nil)
         if let precedent, precedent != environnement {
-            for cle in [Cle.role, Cle.etatMoteur, Cle.enAttente] {
+            for cle in [Cle.role, Cle.etatMoteur, Cle.enAttente, Cle.abonnements] {
                 stockage.removeObject(forKey: cle)
             }
             miroir.oublierTout()
@@ -368,9 +378,110 @@ final class Synchronisation {
     }
 }
 
+// MARK: - Signaux : prévenir l'autre, même Jublo fermé
+
+extension Synchronisation {
+    /// Base de données de la zone, selon le rôle.
+    private var base: CKDatabase {
+        role == .proprietaire ? conteneurCloudKit.privateCloudDatabase : conteneurCloudKit.sharedCloudDatabase
+    }
+
+    /// Abonne cet iPhone aux signaux de l'autre pour ces rubriques, et le désabonne des autres.
+    /// Rien n'est renvoyé à iCloud si rien n'a changé depuis le dernier enregistrement.
+    func abonner(_ voulus: AbonnementsVoulus) async {
+        abonnementsVoulus = voulus
+        await appliquerAbonnements()
+    }
+
+    /// Attend l'envoi des signaux en cours (raccourci Siri, réveil en arrière-plan).
+    func terminerSignaux() async {
+        let enCours = signauxEnCours
+        signauxEnCours.removeAll()
+        for signal in enCours {
+            await signal.value
+        }
+    }
+
+    /// Enregistre les abonnements voulus dans la base du rôle courant. Le texte de chaque
+    /// notification est fixé ici : iCloud l'affiche sans réveiller Jublo.
+    private func appliquerAbonnements() async {
+        guard active, moteur != nil, let voulus = abonnementsVoulus else { return }
+        let rubriques = voulus.rubriques.map(\.rawValue).sorted().joined(separator: ",")
+        let empreinte = "\(Self.environnementCourant)|\(role)|\(voulus.membre.rawValue)|\(rubriques)|1"
+        guard stockage.string(forKey: Cle.abonnements) != empreinte else { return }
+        let aEnregistrer: [CKSubscription] = voulus.rubriques.sorted { $0.rawValue < $1.rawValue }.map { rubrique in
+            let abonnement = CKDatabaseSubscription(subscriptionID: Signaux.identifiantAbonnement(rubrique))
+            abonnement.recordType = Signaux.typeEnregistrement(rubrique, pour: voulus.membre)
+            let notification = CKSubscription.NotificationInfo()
+            notification.title = Signaux.titre(rubrique)
+            notification.alertBody = Signaux.texte(rubrique, de: voulus.membre.autre)
+            notification.soundName = "default"
+            abonnement.notificationInfo = notification
+            return abonnement
+        }
+        let aSupprimer = RubriqueSignal.allCases.filter { !voulus.rubriques.contains($0) }.map(Signaux.identifiantAbonnement)
+        do {
+            let resultat = try await base.modifySubscriptions(saving: aEnregistrer, deleting: aSupprimer)
+            var reussi = true
+            for (identifiant, issue) in resultat.saveResults {
+                if case .failure(let erreur) = issue {
+                    reussi = false
+                    journal.error("Abonnement \(identifiant) refusé : \(erreur)")
+                }
+            }
+            // Supprimer un abonnement qui n'existe pas échoue sans conséquence.
+            if reussi {
+                stockage.set(empreinte, forKey: Cle.abonnements)
+            }
+        } catch {
+            journal.error("Abonnements aux signaux impossibles : \(error)")
+        }
+    }
+
+    /// Envoie un signal à l'autre, sauf si la même rubrique en a envoyé un il y a peu.
+    private func signaler(_ changement: Changement) {
+        guard active, let membre = membreCourant(),
+              let rubrique = Signaux.rubrique(changement, maintenant: .now),
+              cadence.autoriser(rubrique, a: .now) else { return }
+        // Jublo peut passer en arrière-plan juste après le changement : on demande un sursis.
+        let sursis = UIApplication.shared.beginBackgroundTask(withName: "Signal")
+        signauxEnCours.append(Task {
+            await self.envoyerSignal(rubrique, de: membre)
+            if sursis != .invalid {
+                UIApplication.shared.endBackgroundTask(sursis)
+            }
+        })
+    }
+
+    /// Réécrit l'enregistrement du signal (nom fixe) dans la zone partagée, après avoir envoyé
+    /// les données : en touchant la notification, l'autre doit trouver le changement.
+    private func envoyerSignal(_ rubrique: RubriqueSignal, de membre: Membre) async {
+        await demarrer()
+        guard let moteur else { return }
+        try? await moteur.sendChanges()
+        guard moteur === self.moteur, etatPartage == .actif || etatPartage == .participant else { return }
+        let destinataire = membre.autre
+        let signal = CKRecord(
+            recordType: Signaux.typeEnregistrement(rubrique, pour: destinataire),
+            recordID: CKRecord.ID(recordName: Signaux.nomEnregistrement(rubrique, pour: destinataire), zoneID: zone)
+        )
+        signal["le"] = Date.now
+        signal["par"] = membre.rawValue
+        do {
+            _ = try await base.modifyRecords(saving: [signal], deleting: [], savePolicy: .allKeys)
+        } catch {
+            journal.info("Signal \(rubrique.rawValue) non envoyé : \(error)")
+        }
+    }
+}
+
 // MARK: - Changements locaux
 
 extension Synchronisation: ObservateurChangements {
+    func aChange(_ changement: Changement) {
+        signaler(changement)
+    }
+
     func aModifie(_ modele: any Synchronisable) {
         signaler(.saveRecord(identifiant(modele.id)), cle: "+\(modele.id.uuidString)")
     }
@@ -444,10 +555,7 @@ extension Synchronisation: CKSyncEngineDelegate {
         if role == .proprietaire, let nouveauPartage = enregistrements.lazy.compactMap({ $0 as? CKShare }).first {
             partage = nouveauPartage
         }
-        let aAnnoncer = miroir.appliquer(enregistrements, enAttente: enAttente)
-        if !lectureInitiale, !aAnnoncer.isEmpty {
-            surReception?(aAnnoncer)
-        }
+        miroir.appliquer(enregistrements, enAttente: enAttente)
 
         let suppressions = changements.deletions.filter { $0.recordID.zoneID.zoneName == Self.nomZone }
         if suppressions.contains(where: { $0.recordType == CKRecord.SystemType.share }) {
@@ -600,7 +708,7 @@ extension Synchronisation {
 
         // Le versement reste en troisième position : son `cagnotteId` est ajouté plus bas.
         let modeles: [any Synchronisable] = [element, cagnotte, versement, evenement, destination, sortie, retard, souhait]
-        let enregistrements = modeles.map { modele in
+        var enregistrements = modeles.map { modele in
             let enregistrement = CKRecord(
                 recordType: type(of: modele).typeEnregistrement,
                 recordID: CKRecord.ID(recordName: modele.id.uuidString, zoneID: zoneTemporaire.zoneID)
@@ -609,6 +717,18 @@ extension Synchronisation {
             return enregistrement
         }
         enregistrements[2]["cagnotteId"] = cagnotte.id.uuidString
+        // Un signal de chaque type (rubrique et destinataire), pour les notifications chez l'autre.
+        for rubrique in RubriqueSignal.allCases {
+            for destinataire in Membre.allCases {
+                let signal = CKRecord(
+                    recordType: Signaux.typeEnregistrement(rubrique, pour: destinataire),
+                    recordID: CKRecord.ID(recordName: Signaux.nomEnregistrement(rubrique, pour: destinataire), zoneID: zoneTemporaire.zoneID)
+                )
+                signal["le"] = date
+                signal["par"] = destinataire.autre.rawValue
+                enregistrements.append(signal)
+            }
+        }
         let partage = CKShare(recordZoneID: zoneTemporaire.zoneID)
         partage[CKShare.SystemFieldKey.title] = "Schéma"
         partage.publicPermission = .none

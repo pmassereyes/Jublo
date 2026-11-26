@@ -16,18 +16,16 @@ final class DelegueApplication: NSObject, UIApplicationDelegate {
 
     /// Notification push silencieuse de CloudKit : l'autre iPhone a envoyé des changements.
     /// L'app est souvent réveillée en arrière-plan sans scène, donc sans la synchronisation que
-    /// lance l'écran : on synchronise ici (20 s au plus, le système en laisse 30), puis on attend
-    /// que les notifications des changements reçus soient parties et les rappels reprogrammés.
+    /// lance l'écran : on synchronise ici (20 s au plus, le système en laisse 30), puis on
+    /// reprogramme les rappels (l'autre a pu en ajouter). Les notifications « l'autre a mis à
+    /// jour… » ne passent pas par ici : iCloud les affiche lui-même (`Signaux`).
     func application(
         _ application: UIApplication,
         didReceiveRemoteNotification userInfo: [AnyHashable: Any]
     ) async -> UIBackgroundFetchResult {
         guard let synchronisation = Synchronisation.courante else { return .noData }
         await synchronisation.synchroniser(auPlus: .seconds(20))
-        if let notificateur = Notificateur.courant {
-            await notificateur.terminerEnvois()
-            await notificateur.replanifier()
-        }
+        await Notificateur.courant?.replanifier()
         return .newData
     }
 
@@ -43,8 +41,8 @@ final class DelegueApplication: NSObject, UIApplicationDelegate {
 }
 
 extension DelegueApplication: UNUserNotificationCenterDelegate {
-    /// App au premier plan : les rappels s'affichent, pas les annonces (l'écran montre déjà le
-    /// changement).
+    /// App au premier plan : les rappels s'affichent, pas les notifications « l'autre a mis à
+    /// jour… » (l'écran montre déjà le changement).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
@@ -52,15 +50,22 @@ extension DelegueApplication: UNUserNotificationCenterDelegate {
         notification.request.identifier.hasPrefix(Rappels.prefixe) ? [.banner, .list, .sound] : []
     }
 
-    /// Notification touchée : on ouvre l'onglet (et la liste) dont elle parle.
+    /// Notification touchée : on ouvre l'onglet (et la liste) dont elle parle. Un rappel le dit
+    /// dans ses infos ; une notification d'iCloud, par son abonnement (`Signaux`).
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
+        let userInfo = response.notification.request.content.userInfo
         var infos: [String: String] = [:]
-        for (cle, valeur) in response.notification.request.content.userInfo {
-            if let cle = cle as? String, let valeur = valeur as? String {
-                infos[cle] = valeur
+        let abonnement = CKNotification(fromRemoteNotificationDictionary: userInfo)?.subscriptionID
+        if let rubrique = Signaux.rubrique(abonnement: abonnement) {
+            infos = Signaux.ecran(rubrique)
+        } else {
+            for (cle, valeur) in userInfo {
+                if let cle = cle as? String, let valeur = valeur as? String {
+                    infos[cle] = valeur
+                }
             }
         }
         await MainActor.run { [infos] in

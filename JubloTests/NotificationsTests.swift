@@ -11,7 +11,7 @@ final class CentreFactice: CentreNotifications {
     var demandes = 0
     /// Rappels programmés, par identifiant.
     var programmees: [String: NotificationPrevue] = [:]
-    /// Annonces envoyées tout de suite.
+    /// Notifications envoyées tout de suite.
     var envoyees: [NotificationPrevue] = []
 
     func statut() async -> StatutNotifications { statutCourant }
@@ -39,214 +39,136 @@ final class CentreFactice: CentreNotifications {
     }
 }
 
-/// Ce que l'iPhone de Pablo voit changer quand celui de Julie lui envoie ses enregistrements.
+/// Ce que `Depot` signale pour prévenir l'autre.
 @MainActor
-struct ChangementsRecusTests {
-    let pablo: Banc
-    let julie: Banc
-    let zone = CKRecordZone.ID(zoneName: "Jublo", ownerName: CKCurrentUserDefaultName)
+struct ChangementsLocauxTests {
+    let banc: Banc
+    let observateur = ObservateurEspion()
 
     init() throws {
-        pablo = try Banc()
-        julie = try Banc()
+        banc = try Banc()
+        banc.depot.observateur = observateur
     }
 
-    /// Envoie des modèles de Julie chez Pablo, comme CloudKit.
-    @discardableResult
-    private func recevoir(_ modeles: [any Synchronisable], enAttente: Set<String> = []) -> [ChangementRecu] {
-        let depart = MiroirLocal(contexte: julie.conteneur.mainContext)
-        let enregistrements = modeles.map { depart.enregistrement(pour: $0, zone: zone) }
-        return MiroirLocal(contexte: pablo.conteneur.mainContext).appliquer(enregistrements, enAttente: enAttente)
+    private var natures: [Changement.Nature] { observateur.changements.map(\.nature) }
+
+    @Test func ajouterCocherEtJeterSontSignales() throws {
+        let lait = try banc.ajouter("Lait", a: .courses, par: .julie)
+        banc.depot.basculer(lait, par: .julie)
+        banc.depot.basculer(lait, par: .julie)
+        banc.depot.supprimer(lait, par: .julie)
+        banc.depot.restaurer(lait)
+
+        #expect(natures == [.ajout, .coche, .suppression])
+        #expect(observateur.changements.first == Changement(nature: .ajout, sujet: .liste(.courses, pour: nil), auteur: .julie))
     }
 
-    @Test func unAjoutDeLAutreEstSignale() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .julie)
+    @Test func uneEnvieGardeSonDestinataire() throws {
+        banc.depot.ajouter("Céramique", a: .wishList, par: .pablo, pour: .julie)
 
-        let changements = recevoir([lait])
-
-        #expect(changements == [ChangementRecu(
-            nature: .ajout, sujet: .liste(.courses, pour: nil), titre: "Lait", par: .julie, le: lait.modifieLe
-        )])
+        #expect(observateur.changements == [Changement(nature: .ajout, sujet: .liste(.wishList, pour: .julie), auteur: .pablo)])
     }
 
-    @Test func uneRelectureNeSignaleRien() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .julie)
-        recevoir([lait])
+    @Test func unRappelSeulNEstPasSignale() throws {
+        let plombier = try banc.ajouter("Plombier", a: .penseBete)
+        let dentiste = try #require(banc.depot.ajouterEvenement("Dentiste", debut: banc.maintenant, par: .pablo))
+        observateur.changements.removeAll()
 
-        #expect(recevoir([lait]).isEmpty)
+        banc.depot.programmerRappel(banc.maintenant.addingTimeInterval(3_600), pour: plombier)
+        banc.depot.modifier(dentiste) { $0.rappelBrut = RappelEvenement.uneHeure.rawValue }
+
+        #expect(natures.isEmpty)
     }
 
-    @Test func unElementCocheEstSignaleAvecQuiLACoche() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .pablo)
-        recevoir([lait])
-        julie.avancer(heures: 1)
-        julie.depot.basculer(lait, par: .julie)
+    @Test func unRendezVousModifieOuJeteEstSignale() throws {
+        let dentiste = try #require(banc.depot.ajouterEvenement("Dentiste", debut: banc.maintenant, par: .pablo))
+        banc.depot.modifier(dentiste) { $0.lieu = "Cabinet" }
+        banc.depot.supprimer(dentiste, par: .pablo)
 
-        let changements = recevoir([lait])
-
-        #expect(changements.map(\.nature) == [.coche])
-        #expect(changements.first?.par == .julie)
-    }
-
-    @Test func unElementMisALaCorbeilleEstSignale() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .pablo)
-        recevoir([lait])
-        julie.avancer(heures: 1)
-        julie.depot.supprimer(lait, par: .julie)
-
-        #expect(recevoir([lait]).map(\.nature) == [.suppression])
-    }
-
-    @Test func unElementDejaALaCorbeilleNEstPasUnAjout() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .julie)
-        julie.depot.supprimer(lait, par: .julie)
-
-        #expect(recevoir([lait]).isEmpty)
-    }
-
-    @Test func unRendezVousModifieEstSignale() throws {
-        let dentiste = try #require(julie.depot.ajouterEvenement("Dentiste", debut: julie.maintenant, par: .pablo))
-        recevoir([dentiste])
-        julie.avancer(heures: 1)
-        julie.depot.modifier(dentiste) { $0.lieu = "Cabinet" }
-
-        let changements = recevoir([dentiste])
-
-        #expect(changements.map(\.nature) == [.modification])
-        #expect(changements.first?.par == nil)
-    }
-
-    @Test func unRappelAjouteSeulNEstPasSignale() throws {
-        let dentiste = try #require(julie.depot.ajouterEvenement("Dentiste", debut: julie.maintenant, par: .pablo))
-        recevoir([dentiste])
-        julie.avancer(heures: 1)
-        julie.depot.modifier(dentiste) { $0.rappelBrut = RappelEvenement.uneHeure.rawValue }
-
-        #expect(recevoir([dentiste]).isEmpty)
-        let recu = try #require(try pablo.tous(Evenement.self).first)
-        #expect(recu.rappel == .uneHeure)
-    }
-
-    @Test func unChangementLocalPlusRecentEnAttenteNEstPasSignale() throws {
-        let lait = try julie.ajouter("Lait", a: .courses, par: .pablo)
-        recevoir([lait])
-        let local = try #require(try pablo.tous(ElementListe.self).first)
-        julie.avancer(heures: 1)
-        julie.depot.basculer(lait, par: .julie)
-        pablo.avancer(heures: 2)
-        pablo.depot.supprimer(local, par: .pablo)
-
-        #expect(recevoir([lait], enAttente: [lait.id.uuidString]).isEmpty)
+        #expect(natures == [.ajout, .modification, .suppression])
     }
 
     @Test func lesAutresTypesNeSontPasSignales() throws {
-        let sortie = try #require(julie.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, par: .julie))
+        banc.depot.ajouterSortie("Le Comptoir", categorie: .restaurant, par: .julie)
+        banc.depot.creerCagnotte("Lisbonne", par: .pablo)
+        banc.depot.confierSouhait("cuisines un soir", par: .julie)
 
-        #expect(recevoir([sortie]).isEmpty)
+        #expect(natures.isEmpty)
     }
 }
 
 @MainActor
-struct AnnoncesTests {
+struct SignauxTests {
     let maintenant = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
-    private func changement(
-        _ nature: ChangementRecu.Nature, _ titre: String, dans type: TypeListe = .courses,
-        pour destinataire: Membre? = nil, par auteur: Membre? = .julie, il yA: TimeInterval = 60
-    ) -> ChangementRecu {
-        ChangementRecu(nature: nature, sujet: .liste(type, pour: destinataire), titre: titre, par: auteur, le: maintenant - yA)
+    private func liste(_ nature: Changement.Nature, _ type: TypeListe, pour: Membre? = nil, auteur: Membre = .julie) -> Changement {
+        Changement(nature: nature, sujet: .liste(type, pour: pour), auteur: auteur)
     }
 
-    private func rendezVous(_ nature: ChangementRecu.Nature, _ titre: String, debut: Date, par auteur: Membre? = nil) -> ChangementRecu {
-        ChangementRecu(nature: nature, sujet: .agenda(debut: debut, fin: debut, journeeEntiere: false), titre: titre, par: auteur, le: maintenant)
+    private func rendezVous(_ nature: Changement.Nature, debut: Date) -> Changement {
+        Changement(nature: nature, sujet: .agenda(debut: debut, fin: debut, journeeEntiere: false), auteur: .julie)
     }
 
-    private func annonces(_ changements: [ChangementRecu], listes: Bool = true, agenda: Bool = true) -> [NotificationPrevue] {
-        Annonces.prevues(changements, pour: .pablo, listes: listes, agenda: agenda, maintenant: maintenant)
+    private func rubrique(_ changement: Changement) -> RubriqueSignal? {
+        Signaux.rubrique(changement, maintenant: maintenant)
     }
 
-    @Test func unAjoutDeLAutreEstAnnonce() throws {
-        let annonce = try #require(annonces([changement(.ajout, "Lait")]).first)
-
-        #expect(annonce.titre == "Courses")
-        #expect(annonce.corps == "Julie a ajouté « Lait »")
-        #expect(annonce.date == nil)
-        #expect(annonce.ouvrir == ["onglet": "listes", "liste": "courses"])
-        #expect(annonce.identifiant.hasPrefix(Annonces.prefixe))
+    @Test func lesCoursesEtLePenseBeteSignalentAjoutsEtCoches() {
+        #expect(rubrique(liste(.ajout, .courses)) == .courses)
+        #expect(rubrique(liste(.coche, .courses)) == .courses)
+        #expect(rubrique(liste(.ajout, .penseBete)) == .penseBete)
+        #expect(rubrique(liste(.coche, .penseBete)) == .penseBete)
+        #expect(rubrique(liste(.suppression, .courses)) == nil)
     }
 
-    @Test func plusieursChangementsSontRegroupes() {
-        let resultat = annonces([
-            changement(.ajout, "Lait"), changement(.ajout, "Œufs"), changement(.coche, "Pain"),
-            changement(.ajout, "Pain"), changement(.ajout, "Beurre"), changement(.ajout, "Sel"),
-        ])
-
-        #expect(resultat.map(\.corps) == [
-            "Julie a ajouté 5 éléments : Lait, Œufs, Pain et 2 autres",
-            "Julie a coché « Pain »",
-        ])
+    @Test func laWishListNeSignaleQueLesEnviesPourSoi() {
+        #expect(rubrique(liste(.ajout, .wishList, pour: .julie)) == .wishList)
+        #expect(rubrique(liste(.ajout, .wishList, pour: .pablo)) == nil)
+        #expect(rubrique(liste(.coche, .wishList, pour: .julie)) == nil)
     }
 
-    @Test func sesPropresChangementsNeSontPasAnnonces() {
-        #expect(annonces([changement(.ajout, "Lait", par: .pablo)]).isEmpty)
+    @Test func lAgendaNeSignalePasLePasse() {
+        #expect(rubrique(rendezVous(.ajout, debut: maintenant + 3_600)) == .agenda)
+        #expect(rubrique(rendezVous(.modification, debut: maintenant + 3_600)) == .agenda)
+        #expect(rubrique(rendezVous(.suppression, debut: maintenant + 3_600)) == .agenda)
+        #expect(rubrique(rendezVous(.suppression, debut: maintenant - 3 * 86_400)) == nil)
     }
 
-    @Test func unChangementAncienNEstPasAnnonce() {
-        #expect(annonces([changement(.ajout, "Lait", il: Annonces.fraicheur + 60)]).isEmpty)
+    @Test func leDestinataireFaitPartieDuType() {
+        #expect(Signaux.typeEnregistrement(.courses, pour: .julie) == "SignalCoursesPourJulie")
+        #expect(Signaux.typeEnregistrement(.penseBete, pour: .pablo) == "SignalPenseBetePourPablo")
+        #expect(Signaux.nomEnregistrement(.agenda, pour: .pablo) == "signal-agenda-pablo")
+        let types = Set(RubriqueSignal.allCases.flatMap { rubrique in Membre.allCases.map { Signaux.typeEnregistrement(rubrique, pour: $0) } })
+        #expect(types.count == 8)
     }
 
-    @Test func lesSuppressionsDansLesListesNeSontPasAnnoncees() {
-        #expect(annonces([changement(.suppression, "Lait")]).isEmpty)
+    @Test func lAbonnementDitQuelEcranOuvrir() {
+        let abonnement = Signaux.identifiantAbonnement(.wishList)
+
+        #expect(Signaux.rubrique(abonnement: abonnement) == .wishList)
+        #expect(Signaux.rubrique(abonnement: "autre-chose") == nil)
+        #expect(Signaux.rubrique(abonnement: nil) == nil)
+        #expect(Signaux.ecran(.wishList) == ["onglet": "listes", "liste": "wishList", "envies": "autre"])
+        #expect(Signaux.ecran(.agenda) == ["onglet": "agenda"])
     }
 
-    @Test func laWishListNAnnonceQueLesEnviesDeLAutre() {
-        let resultat = annonces([
-            changement(.ajout, "Plaid", dans: .wishList, pour: .julie),
-            changement(.ajout, "Platine", dans: .wishList, pour: .pablo),
-            changement(.coche, "Casque", dans: .wishList, pour: .pablo),
-        ])
-
-        #expect(resultat.map(\.corps) == ["Julie a ajouté « Plaid » à ses envies"])
-        #expect(resultat.first?.titre == "Wish list")
-        #expect(resultat.first?.ouvrir == ["onglet": "listes", "liste": "wishList", "pour": "julie"])
+    @Test func lesTextesNommentLAutre() {
+        #expect(Signaux.texte(.courses, de: .julie) == "Julie a mis à jour les courses")
+        #expect(Signaux.texte(.wishList, de: .pablo) == "Pablo a ajouté une envie à sa wish list")
+        #expect(Signaux.titre(.agenda) == "Agenda")
     }
 
-    @Test func lesPreferencesCoupentChaqueRubrique() {
-        let rdv = rendezVous(.ajout, "Dentiste", debut: maintenant + 3_600, par: .julie)
+    @Test func unSignalParRubriqueToutesLesDixMinutes() {
+        var cadence = CadenceSignaux()
+        let premier = cadence.autoriser(.courses, a: maintenant)
+        let rafale = cadence.autoriser(.courses, a: maintenant + 60)
+        let autreRubrique = cadence.autoriser(.agenda, a: maintenant + 60)
+        let plusTard = cadence.autoriser(.courses, a: maintenant + Signaux.intervalle)
 
-        #expect(annonces([changement(.ajout, "Lait"), rdv], listes: false).map(\.titre) == ["Agenda"])
-        #expect(annonces([changement(.ajout, "Lait"), rdv], agenda: false).map(\.titre) == ["Courses"])
-    }
-
-    @Test func unRendezVousAjouteDitQuand() throws {
-        let debut = maintenant + 3_600
-        let annonce = try #require(annonces([rendezVous(.ajout, "Dentiste", debut: debut, par: .julie)]).first)
-
-        #expect(annonce.titre == "Agenda")
-        #expect(annonce.corps == "Julie a ajouté « Dentiste » · \(Formats.jourProche(debut, maintenant: maintenant)) à \(Formats.heure(debut))")
-        #expect(annonce.ouvrir == ["onglet": "agenda"])
-    }
-
-    @Test func uneModificationSansAuteurVientDeLAutre() throws {
-        let annonce = try #require(annonces([rendezVous(.modification, "Dentiste", debut: maintenant + 3_600)]).first)
-
-        #expect(annonce.corps.hasPrefix("Julie a modifié « Dentiste »"))
-    }
-
-    @Test func unRendezVousRetireEstAnnonce() {
-        #expect(annonces([rendezVous(.suppression, "Dentiste", debut: maintenant + 3_600, par: .julie)]).map(\.corps)
-            == ["Julie a retiré « Dentiste » de l'agenda"])
-    }
-
-    @Test func unRendezVousPasseNEstPasAnnonce() {
-        #expect(annonces([rendezVous(.suppression, "Dentiste", debut: maintenant - 3 * 86_400, par: .julie)]).isEmpty)
-    }
-
-    @Test func lEnumerationResteCourte() {
-        #expect(Annonces.enumeration(["A"]) == "A")
-        #expect(Annonces.enumeration(["A", "B"]) == "A et B")
-        #expect(Annonces.enumeration(["A", "B", "C"]) == "A, B et C")
-        #expect(Annonces.enumeration(["A", "B", "C", "D", "E"]) == "A, B, C et 2 autres")
+        #expect(premier)
+        #expect(!rafale)
+        #expect(autreRubrique)
+        #expect(plusTard)
     }
 }
 
@@ -373,23 +295,13 @@ struct RappelsProgrammesTests {
         #expect(notificateur.statut == .autorisees)
     }
 
-    @Test func lesAnnoncesPartentEnArrierePlanSeulement() async throws {
-        let changement = ChangementRecu(
-            nature: .ajout, sujet: .liste(.courses, pour: nil), titre: "Lait", par: .julie, le: banc.maintenant
-        )
-        notificateur.annoncer([changement])
-        await notificateur.terminerEnvois()
-        #expect(centre.envoyees.map(\.corps) == ["Julie a ajouté « Lait »"])
+    @Test func lesReglagesDisentAQuoiSAbonner() {
+        #expect(notificateur.abonnementsVoulus == Synchronisation.AbonnementsVoulus(
+            membre: .pablo, rubriques: [.penseBete, .courses, .wishList, .agenda]
+        ))
 
-        let stockage = try #require(UserDefaults(suiteName: "tests-notifications-\(UUID().uuidString)"))
-        let banc = banc
-        let auPremierPlan = Notificateur(
-            contexte: banc.conteneur.mainContext, identite: identite, centre: centre,
-            stockage: stockage, horloge: { banc.maintenant }, estAuPremierPlan: { true }
-        )
-        auPremierPlan.annoncer([changement])
-        await auPremierPlan.terminerEnvois()
-        #expect(centre.envoyees.count == 1)
+        notificateur.annoncerListes = false
+        #expect(notificateur.abonnementsVoulus?.rubriques == [.agenda])
     }
 
     @Test func lesPreferencesSontGardeesSurCetIPhone() throws {
@@ -409,14 +321,15 @@ struct NavigationTests {
     @Test func uneNotificationOuvreLOngletEtLaListe() {
         let navigation = Navigation(onglet: .accueil)
 
-        navigation.ouvrir(["onglet": "listes", "liste": "wishList", "pour": "julie"])
+        navigation.ouvrir(Signaux.ecran(.wishList))
 
         #expect(navigation.onglet == .listes)
         #expect(navigation.listeDemandee == .wishList)
-        #expect(navigation.enviesDemandeesPour == .julie)
+        #expect(navigation.enviesDeLAutre)
 
         navigation.ouvrir(["onglet": "agenda"])
         #expect(navigation.onglet == .agenda)
         #expect(navigation.listeDemandee == nil)
+        #expect(!navigation.enviesDeLAutre)
     }
 }

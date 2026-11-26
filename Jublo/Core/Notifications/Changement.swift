@@ -1,9 +1,8 @@
 import Foundation
 
-/// Ce qu'un enregistrement reçu de CloudKit a changé dans une liste ou dans l'agenda, pour
-/// prévenir l'autre membre (voir `Annonces`). Seuls les éléments de liste et les rendez-vous
-/// sont concernés, et seulement quand la version reçue est plus récente que la version locale.
-struct ChangementRecu: Equatable {
+/// Ce qu'une écriture de `Depot` a changé dans une liste ou dans l'agenda, pour prévenir l'autre
+/// membre (voir `Signaux`). Les autres modèles ne sont pas concernés.
+struct Changement: Equatable {
     enum Nature: Hashable {
         case ajout, coche, modification, suppression
     }
@@ -16,19 +15,16 @@ struct ChangementRecu: Equatable {
 
     let nature: Nature
     let sujet: Sujet
-    let titre: String
-    /// Qui a fait le changement, quand l'enregistrement le dit (auteur, coché par, supprimé
-    /// par) ; nil pour une modification de rendez-vous, faite forcément sur l'autre iPhone.
-    let par: Membre?
-    /// Date de la modification (`modifieLe` reçu).
-    let le: Date
+    /// Auteur de l'élément (pour reconnaître une envie notée pour soi-même).
+    let auteur: Membre?
 }
 
-/// État d'un élément de liste ou d'un rendez-vous avant d'appliquer un enregistrement reçu.
-struct EtatAvantReception {
+/// État d'un élément de liste ou d'un rendez-vous avant une écriture, pour savoir ensuite ce
+/// qu'elle a changé.
+struct EtatAvantChangement {
     private let supprime: Bool
     private let coche: Bool
-    /// Champs visibles d'un rendez-vous : un changement de rappel seul n'est pas annoncé.
+    /// Champs visibles d'un rendez-vous : un changement de rappel seul ne compte pas.
     private let champsVisibles: [String?]
 
     init?(_ modele: any Synchronisable) {
@@ -46,23 +42,24 @@ struct EtatAvantReception {
         }
     }
 
-    /// Changement entre cet état et le modèle une fois l'enregistrement appliqué.
-    func changement(vers modele: any Synchronisable) -> ChangementRecu? {
+    /// Changement entre cet état et le modèle après l'écriture : mise à la corbeille, élément
+    /// coché, ou rendez-vous modifié. Décocher, restaurer ou changer un rappel ne compte pas.
+    func changement(vers modele: any Synchronisable) -> Changement? {
         switch modele {
         case let element as ElementListe:
             if !supprime, element.supprimeLe != nil {
-                return ChangementRecu(element, .suppression, par: element.supprimePar)
+                return Changement(element, .suppression)
             }
             if !supprime, !coche, element.estCoche {
-                return ChangementRecu(element, .coche, par: element.cochePar)
+                return Changement(element, .coche)
             }
             return nil
         case let evenement as Evenement:
             if !supprime, evenement.supprimeLe != nil {
-                return ChangementRecu(evenement, .suppression, par: evenement.supprimePar)
+                return Changement(evenement, .suppression)
             }
             if !supprime, evenement.supprimeLe == nil, champsVisibles != Self.champsVisibles(evenement) {
-                return ChangementRecu(evenement, .modification, par: nil)
+                return Changement(evenement, .modification)
             }
             return nil
         default:
@@ -70,13 +67,13 @@ struct EtatAvantReception {
         }
     }
 
-    /// Ajout d'un modèle reçu pour la première fois, s'il n'est pas déjà à la corbeille.
-    static func ajout(_ modele: any Synchronisable) -> ChangementRecu? {
+    /// Ajout d'un élément de liste ou d'un rendez-vous.
+    static func ajout(_ modele: any Synchronisable) -> Changement? {
         switch modele {
         case let element as ElementListe where element.supprimeLe == nil:
-            ChangementRecu(element, .ajout, par: element.auteurId)
+            Changement(element, .ajout)
         case let evenement as Evenement where evenement.supprimeLe == nil:
-            ChangementRecu(evenement, .ajout, par: evenement.auteurId)
+            Changement(evenement, .ajout)
         default:
             nil
         }
@@ -91,19 +88,20 @@ struct EtatAvantReception {
     }
 }
 
-private extension ChangementRecu {
-    init(_ element: ElementListe, _ nature: Nature, par: String?) {
+private extension Changement {
+    init(_ element: ElementListe, _ nature: Nature) {
         self.init(
-            nature: nature, sujet: .liste(element.type, pour: element.type == .wishList ? element.destinataire : nil),
-            titre: element.titre, par: par.flatMap(Membre.init(rawValue:)), le: element.modifieLe
+            nature: nature,
+            sujet: .liste(element.type, pour: element.type == .wishList ? element.destinataire : nil),
+            auteur: element.auteur
         )
     }
 
-    init(_ evenement: Evenement, _ nature: Nature, par: String?) {
+    init(_ evenement: Evenement, _ nature: Nature) {
         self.init(
             nature: nature,
             sujet: .agenda(debut: evenement.debut, fin: evenement.finEffective, journeeEntiere: evenement.journeeEntiere),
-            titre: evenement.titre, par: par.flatMap(Membre.init(rawValue:)), le: evenement.modifieLe
+            auteur: evenement.auteur
         )
     }
 }

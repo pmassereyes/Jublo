@@ -2,11 +2,10 @@ import Foundation
 import Observation
 import SwiftData
 
-/// Notifications locales de cet iPhone :
-/// - les **rappels** du pense-bête et de l'agenda, reprogrammés à partir de la base après
-///   chaque enregistrement, qu'il vienne de `Depot` ou de CloudKit (`replanifier`) ;
-/// - les **annonces** des changements que l'autre a faits dans les listes et l'agenda, reçus
-///   par la synchronisation (`annoncer`). Rien n'est annoncé quand l'app est au premier plan.
+/// Notifications de cet iPhone : autorisation, **rappels** du pense-bête et de l'agenda
+/// (reprogrammés à partir de la base après chaque enregistrement, qu'il vienne de `Depot` ou de
+/// CloudKit), et préférences des notifications « l'autre a mis à jour… », envoyées par iCloud
+/// (`Signaux`, abonnements gérés par `Synchronisation`).
 ///
 /// Les préférences sont propres à cet iPhone (`UserDefaults`).
 @MainActor
@@ -17,12 +16,12 @@ final class Notificateur {
 
     private(set) var statut: StatutNotifications = .aDemander
 
-    /// Prévenir quand l'autre modifie les listes.
+    /// Être prévenu quand l'autre modifie les listes.
     var annoncerListes: Bool {
         didSet { stockage.set(annoncerListes, forKey: Cle.listes) }
     }
 
-    /// Prévenir quand l'autre modifie l'agenda.
+    /// Être prévenu quand l'autre modifie l'agenda.
     var annoncerAgenda: Bool {
         didSet { stockage.set(annoncerAgenda, forKey: Cle.agenda) }
     }
@@ -32,9 +31,7 @@ final class Notificateur {
     @ObservationIgnored private let identite: Identite
     @ObservationIgnored private let stockage: UserDefaults
     @ObservationIgnored private let horloge: () -> Date
-    @ObservationIgnored private let estAuPremierPlan: @MainActor () -> Bool
     @ObservationIgnored private var planification: Task<Void, Never>?
-    @ObservationIgnored private var envois: [Task<Void, Never>] = []
     @ObservationIgnored private var observation: (any NSObjectProtocol)?
 
     private enum Cle {
@@ -48,7 +45,6 @@ final class Notificateur {
         centre: any CentreNotifications,
         stockage: UserDefaults = .standard,
         horloge: @escaping () -> Date = { .now },
-        estAuPremierPlan: @escaping @MainActor () -> Bool = { false },
         courant: Bool = false
     ) {
         self.contexte = contexte
@@ -56,7 +52,6 @@ final class Notificateur {
         self.centre = centre
         self.stockage = stockage
         self.horloge = horloge
-        self.estAuPremierPlan = estAuPremierPlan
         annoncerListes = stockage.object(forKey: Cle.listes) as? Bool ?? true
         annoncerAgenda = stockage.object(forKey: Cle.agenda) as? Bool ?? true
         if courant {
@@ -122,29 +117,12 @@ final class Notificateur {
         }
     }
 
-    // MARK: - Annonces
-
-    /// Annonce les changements que l'autre vient de faire. L'envoi est asynchrone : au réveil par
-    /// une notification push, `terminerEnvois` l'attend avant de rendre la main au système.
-    func annoncer(_ changements: [ChangementRecu]) {
-        guard identite.estChoisi, !estAuPremierPlan() else { return }
-        let annonces = Annonces.prevues(
-            changements, pour: identite.membre, listes: annoncerListes, agenda: annoncerAgenda, maintenant: horloge()
-        )
-        guard !annonces.isEmpty else { return }
-        let centre = centre
-        envois.append(Task {
-            for annonce in annonces {
-                await centre.programmer(annonce)
-            }
-        })
-    }
-
-    func terminerEnvois() async {
-        let enCours = envois
-        envois.removeAll()
-        for envoi in enCours {
-            await envoi.value
-        }
+    /// Abonnements voulus aux signaux de l'autre, d'après les réglages ; nil sans membre choisi.
+    var abonnementsVoulus: Synchronisation.AbonnementsVoulus? {
+        guard identite.estChoisi else { return nil }
+        var rubriques: Set<RubriqueSignal> = []
+        if annoncerListes { rubriques.formUnion(RubriqueSignal.listes) }
+        if annoncerAgenda { rubriques.insert(.agenda) }
+        return Synchronisation.AbonnementsVoulus(membre: identite.membre, rubriques: rubriques)
     }
 }

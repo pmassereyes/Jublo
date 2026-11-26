@@ -52,13 +52,12 @@ struct MiroirLocal {
 
     /// Applique des enregistrements reçus. Si un modèle a un changement local en attente plus
     /// récent, il est gardé tel quel : son envoi l'emportera.
-    /// Renvoie ce qui a changé dans les listes et l'agenda, pour prévenir ce membre.
-    @discardableResult
-    func appliquer(_ enregistrements: [CKRecord], enAttente: Set<String> = []) -> [ChangementRecu] {
+    func appliquer(_ enregistrements: [CKRecord], enAttente: Set<String> = []) {
         let tries = enregistrements.sorted { rang($0.recordType) < rang($1.recordType) }
-        let changements = tries.compactMap { appliquer($0, enAttente: enAttente) }
+        for enregistrement in tries {
+            appliquer(enregistrement, enAttente: enAttente)
+        }
         enregistrer()
-        return changements
     }
 
     /// Conflit à l'envoi : le serveur a une autre version de l'enregistrement. On garde la plus
@@ -152,34 +151,26 @@ struct MiroirLocal {
         }
     }
 
-    /// Applique un enregistrement. Renvoie le changement à annoncer : un modèle inconnu ici, ou
-    /// une version strictement plus récente que la version locale (une relecture de toute la
-    /// zone ne renvoie donc rien de ce que cet iPhone a déjà).
-    private func appliquer(_ enregistrement: CKRecord, enAttente: Set<String>) -> ChangementRecu? {
+    private func appliquer(_ enregistrement: CKRecord, enAttente: Set<String>) {
         let nom = enregistrement.recordID.recordName
-        guard let id = UUID(uuidString: nom), let nouveau = fabriquer(enregistrement.recordType) else { return nil }
+        guard let id = UUID(uuidString: nom), let nouveau = fabriquer(enregistrement.recordType) else { return }
         let modifieSurLeServeur = enregistrement["modifieLe"] as? Date ?? .distantPast
-        var changement: ChangementRecu?
         if let local = modele(id, type: enregistrement.recordType) {
             if enAttente.contains(nom) && local.modifieLe > modifieSurLeServeur {
                 completerAvis(local, depuis: enregistrement)
                 memoriser(enregistrement)
-                return nil
+                return
             }
-            let avant = modifieSurLeServeur > local.modifieLe ? EtatAvantReception(local) : nil
             local.reprendre(enregistrement)
             relier(local, enregistrement)
-            changement = avant?.changement(vers: local)
         } else {
             let modele = nouveau()
             modele.id = id
             modele.reprendre(enregistrement)
             contexte.insert(modele)
             relier(modele, enregistrement)
-            changement = EtatAvantReception.ajout(modele)
         }
         memoriser(enregistrement)
-        return changement
     }
 
     /// Fabrique un modèle vide du type de l'enregistrement, ou nil pour un type inconnu

@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Notifications de cet iPhone : autorisation, et annonces des changements de l'autre.
-/// Les rappels, eux, se règlent élément par élément.
+/// Notifications de cet iPhone : autorisation, et notifications « l'autre a mis à jour… »
+/// envoyées par iCloud. Les rappels, eux, se règlent élément par élément.
 struct CarteNotifications: View {
     @Environment(Notificateur.self) private var notificateur
     @Environment(Identite.self) private var identite
@@ -20,7 +20,7 @@ struct CarteNotifications: View {
                 case .autorisees:
                     Toggle(Libelles.quandLAutreModifie("les listes", vuPar: identite.membre), isOn: $notificateur.annoncerListes)
                     Toggle(Libelles.quandLAutreModifie("l'agenda", vuPar: identite.membre), isOn: $notificateur.annoncerAgenda)
-                    Text("Elles arrivent quand Jublo tourne en arrière-plan, parfois avec du retard, et pas si l'app a été fermée depuis le sélecteur d'apps. Ces réglages ne touchent pas aux rappels.")
+                    Text("Elles arrivent même Jublo fermé, sous la forme « \(Signaux.texte(.courses, de: identite.membre.autre)) ». Ces réglages ne touchent pas aux rappels.")
                         .font(.jubloLegende)
                         .foregroundStyle(.texteSecondaire)
                 case .aDemander:
