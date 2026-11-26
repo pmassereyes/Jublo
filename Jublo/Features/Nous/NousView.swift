@@ -76,6 +76,7 @@ struct NousView: View {
                             .foregroundStyle(.texteSecondaire)
                     }
                 }
+                CarteNotifications()
             }
 
             #if DEBUG

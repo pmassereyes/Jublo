@@ -150,6 +150,12 @@ private struct LigneEvenement: View {
                 }
             }
             Spacer(minLength: 0)
+            if evenement.rappel != nil {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.texteSecondaire)
+                    .accessibilityLabel("Avec rappel")
+            }
             PastilleMembre(membre: evenement.concerne, taille: 26)
         }
         .frame(minHeight: Mesures.zoneTactile)
@@ -200,6 +206,7 @@ struct FormulaireEvenement: View {
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
+    @Environment(Notificateur.self) private var notificateur
     @Environment(\.dismiss) private var fermer
 
     @State private var titre = ""
@@ -210,6 +217,7 @@ struct FormulaireEvenement: View {
     @State private var lieu = ""
     @State private var note = ""
     @State private var concerne: Membre?
+    @State private var rappel: RappelEvenement?
     @State private var charge = false
     /// Vrai quand `debut` vient d'être chargé : la fin ne doit pas le suivre cette fois-là.
     @State private var debutCharge = false
@@ -241,6 +249,19 @@ struct FormulaireEvenement: View {
                 }
             }
             Section {
+                Picker("Rappel", selection: $rappel) {
+                    Text("Aucun").tag(RappelEvenement?.none)
+                    ForEach(RappelEvenement.choix(journeeEntiere: journeeEntiere)) { choix in
+                        Text(choix.libelle(journeeEntiere: journeeEntiere)).tag(RappelEvenement?.some(choix))
+                    }
+                }
+            } footer: {
+                if rappel != nil {
+                    Text(Libelles.rappelSonne(pour: concerne, vuPar: identite.membre))
+                        .font(.jubloLegende)
+                }
+            }
+            Section {
                 TextField("Lieu", text: $lieu)
                 TextField("Note", text: $note, axis: .vertical)
                     .lineLimit(1...4)
@@ -255,6 +276,9 @@ struct FormulaireEvenement: View {
             }
         }
         .onAppear(perform: charger)
+        .onChange(of: journeeEntiere) {
+            rappel = rappel?.adapte(journeeEntiere: journeeEntiere)
+        }
         .onChange(of: debut) { ancien, nouveau in
             guard !debutCharge else {
                 debutCharge = false
@@ -286,17 +310,22 @@ struct FormulaireEvenement: View {
         lieu = evenement.lieu ?? ""
         note = evenement.note ?? ""
         concerne = evenement.concerne
+        rappel = evenement.rappel
     }
 
     private func enregistrer() {
         let calendrier = Calendar.current
         let debutFinal = journeeEntiere ? calendrier.startOfDay(for: debut) : debut
         let finFinale: Date? = avecFin ? (journeeEntiere ? calendrier.startOfDay(for: fin) : fin) : nil
+        let rappelFinal = rappel?.adapte(journeeEntiere: journeeEntiere)
+        if rappelFinal != nil {
+            Task { await notificateur.demanderAutorisationSiBesoin() }
+        }
         switch edition {
         case .nouveau:
             depot.ajouterEvenement(
                 titre, debut: debutFinal, fin: finFinale, journeeEntiere: journeeEntiere,
-                lieu: lieu, note: note, pour: concerne, par: identite.membre
+                lieu: lieu, note: note, pour: concerne, rappel: rappelFinal, par: identite.membre
             )
         case .modifier(let evenement):
             guard let titre = Depot.texte(titre) else { return }
@@ -308,6 +337,7 @@ struct FormulaireEvenement: View {
                 $0.lieu = Depot.texte(lieu)
                 $0.note = Depot.texte(note)
                 $0.pourId = concerne?.rawValue
+                $0.rappelBrut = rappelFinal?.rawValue
             }
         }
     }

@@ -33,6 +33,20 @@ enum Libelles {
         return quiEnDebut(membre, vuPar: courant)
     }
 
+    /// Où sonnera le rappel d'un rendez-vous : chez le membre concerné, ou chez les deux.
+    static func rappelSonne(pour concerne: Membre?, vuPar courant: Membre) -> String {
+        switch concerne {
+        case nil: "Le rappel sonnera sur vos deux iPhones."
+        case courant?: "Le rappel sonnera sur ton iPhone."
+        case let autre?: "Le rappel sonnera sur l'iPhone de \(autre.prenom)."
+        }
+    }
+
+    /// « Quand Julie modifie les listes » : réglage des notifications de cet iPhone.
+    static func quandLAutreModifie(_ quoi: String, vuPar courant: Membre) -> String {
+        "Quand \(courant.autre.prenom) modifie \(quoi)"
+    }
+
     /// Titre d'un souhait « ce mois-ci, j'aimerais que tu… » selon qui le lit.
     static func souhait(de auteur: Membre, vuPar courant: Membre) -> String {
         auteur == courant

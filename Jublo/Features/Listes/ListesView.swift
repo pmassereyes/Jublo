@@ -13,11 +13,13 @@ struct ListesView: View {
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Environment(Synchronisation.self) private var synchronisation
+    @Environment(Navigation.self) private var navigation
 
     @State private var type = TypeListe.initial
     @State private var cote = Cote.moi
     @State private var saisie = ""
     @State private var derniereSuppression: ElementListe?
+    @State private var rappel: ElementListe?
     @FocusState private var saisieActive: Bool
 
     var body: some View {
@@ -41,6 +43,8 @@ struct ListesView: View {
             ElementsDeListe(type: type, filtre: filtre) { element in
                 depot.supprimer(element, par: identite.membre)
                 derniereSuppression = element
+            } programmerRappel: { element in
+                rappel = element
             }
         }
         .listStyle(.plain)
@@ -48,6 +52,9 @@ struct ListesView: View {
         .scrollContentBackground(.hidden)
         .background(.fond)
         .refreshable { await synchronisation.synchroniserMaintenant() }
+        .sheet(item: $rappel) { element in
+            FormulaireRappel(element: element)
+        }
         .navigationTitle("Listes")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +71,15 @@ struct ListesView: View {
         } annuler: { element in
             withAnimation { depot.restaurer(element) }
         }
+        // Liste demandée par une notification touchée.
+        .onAppear(perform: ouvrirListeDemandee)
+        .onChange(of: navigation.listeDemandee) { ouvrirListeDemandee() }
+    }
+
+    private func ouvrirListeDemandee() {
+        guard let demandee = navigation.listeDemandee else { return }
+        type = demandee
+        navigation.listeDemandee = nil
     }
 
     private var champAjout: some View {
@@ -126,14 +142,19 @@ struct ListesView: View {
 private struct ElementsDeListe: View {
     let type: TypeListe
     let supprimer: (ElementListe) -> Void
+    let programmerRappel: (ElementListe) -> Void
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
     @Query private var elements: [ElementListe]
 
-    init(type: TypeListe, filtre: Predicate<ElementListe>, supprimer: @escaping (ElementListe) -> Void) {
+    init(
+        type: TypeListe, filtre: Predicate<ElementListe>,
+        supprimer: @escaping (ElementListe) -> Void, programmerRappel: @escaping (ElementListe) -> Void
+    ) {
         self.type = type
         self.supprimer = supprimer
+        self.programmerRappel = programmerRappel
         _elements = Query(filter: filtre, sort: \.creeLe, order: .reverse)
     }
 
@@ -172,6 +193,26 @@ private struct ElementsDeListe: View {
                         Label("Corbeille", systemImage: "trash")
                     }
                 }
+                .swipeActions(edge: .leading) {
+                    if peutAvoirUnRappel(element) {
+                        Button {
+                            programmerRappel(element)
+                        } label: {
+                            Label("Rappel", systemImage: "bell")
+                        }
+                        .tint(.commun)
+                    }
+                }
+                .contextMenu {
+                    if peutAvoirUnRappel(element) {
+                        Button(element.rappelLe == nil ? "Me le rappeler…" : "Modifier le rappel…", systemImage: "bell") {
+                            programmerRappel(element)
+                        }
+                    }
+                    Button("Mettre à la corbeille", systemImage: "trash", role: .destructive) {
+                        withAnimation { supprimer(element) }
+                    }
+                }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: Mesures.rayonCarte, style: .continuous)
                         .fill(Color.surface)
@@ -188,6 +229,11 @@ private struct ElementsDeListe: View {
                 .listRowInsets(EdgeInsets())
         }
         .listSectionSeparator(.hidden)
+    }
+
+    /// Seul le pense-bête a des rappels, et un élément fait n'en a plus besoin.
+    private func peutAvoirUnRappel(_ element: ElementListe) -> Bool {
+        element.type == .penseBete && !element.estCoche
     }
 }
 
@@ -212,6 +258,11 @@ private struct LigneElement: View {
                     Text(detail)
                         .font(.jubloLegende)
                         .foregroundStyle(.texteSecondaire)
+                    if let rappel {
+                        Label(rappel, systemImage: "bell.fill")
+                            .font(.jubloLegende)
+                            .foregroundStyle(.texte)
+                    }
                 }
                 Spacer(minLength: 0)
                 PastilleMembre(membre: element.auteur, taille: 26)
@@ -221,7 +272,13 @@ private struct LigneElement: View {
         .buttonStyle(.plain)
         .accessibilityLabel(element.titre)
         .accessibilityValue(element.estCoche ? element.type.libelleTermine : element.type.libelleEnAttente)
-        .accessibilityHint(detail)
+        .accessibilityHint([detail, rappel.map { "Rappel \($0)" }].compactMap(\.self).joined(separator: ", "))
+    }
+
+    /// « Demain à 09:00 », pour un élément du pense-bête pas encore fait.
+    private var rappel: String? {
+        guard element.type == .penseBete, !element.estCoche, let date = element.rappelLe else { return nil }
+        return "\(Formats.jourProche(date)) à \(Formats.heure(date))"
     }
 
     /// Un cadeau pour une envie offerte, une coche ailleurs.

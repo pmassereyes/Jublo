@@ -32,7 +32,7 @@ final class Notificateur {
     @ObservationIgnored private let identite: Identite
     @ObservationIgnored private let stockage: UserDefaults
     @ObservationIgnored private let horloge: () -> Date
-    @ObservationIgnored private let estAuPremierPlan: () -> Bool
+    @ObservationIgnored private let estAuPremierPlan: @MainActor () -> Bool
     @ObservationIgnored private var planification: Task<Void, Never>?
     @ObservationIgnored private var envois: [Task<Void, Never>] = []
     @ObservationIgnored private var observation: (any NSObjectProtocol)?
@@ -48,7 +48,7 @@ final class Notificateur {
         centre: any CentreNotifications,
         stockage: UserDefaults = .standard,
         horloge: @escaping () -> Date = { .now },
-        estAuPremierPlan: @escaping () -> Bool = { false },
+        estAuPremierPlan: @escaping @MainActor () -> Bool = { false },
         courant: Bool = false
     ) {
         self.contexte = contexte

@@ -15,6 +15,11 @@ extension View {
             .environment(Depot(contexte: conteneur.mainContext))
             .environment(identite)
             .environment(Synchronisation(contexte: conteneur.mainContext, active: false))
+            .environment(Notificateur(
+                contexte: conteneur.mainContext, identite: identite, centre: CentreInerte(),
+                stockage: UserDefaults(suiteName: "apercu")!
+            ))
+            .environment(Navigation())
             .environment(ConfigurationAssistant(
                 stockage: UserDefaults(suiteName: "apercu")!, serviceTrousseau: "apercu", simulee: true
             ))
