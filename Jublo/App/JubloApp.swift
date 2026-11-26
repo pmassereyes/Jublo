@@ -109,7 +109,10 @@ struct JubloApp: App {
                         Task { await notificateur.replanifier() }
                     }
                     if phase == .active {
-                        Task { await synchronisation.synchroniserMaintenant() }
+                        Task {
+                            await synchronisation.synchroniserMaintenant()
+                            await synchronisation.reessayerAbonnements()
+                        }
                         Task {
                             await notificateur.actualiserStatut()
                             notificateur.planifierBientot()

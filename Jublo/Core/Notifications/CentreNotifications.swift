@@ -2,15 +2,15 @@ import Foundation
 import OSLog
 import UserNotifications
 
-/// Notification locale à programmer : un rappel (à sa date) ou une annonce (tout de suite).
+/// Rappel à programmer en notification locale.
 struct NotificationPrevue: Equatable {
     let identifiant: String
     let titre: String
     let corps: String
     /// Fil qui regroupe les notifications dans le centre de notifications.
     let fil: String
-    /// Date d'envoi ; nil pour tout de suite.
-    let date: Date?
+    /// Date d'envoi.
+    let date: Date
     /// Écran à ouvrir quand on touche la notification (clés `onglet` et `liste`).
     let ouvrir: [String: String]
 }
@@ -64,12 +64,10 @@ final class CentreSysteme: CentreNotifications {
         contenu.sound = .default
         contenu.threadIdentifier = notification.fil
         contenu.userInfo = notification.ouvrir
-        let declencheur = notification.date.map { date in
-            UNCalendarNotificationTrigger(
-                dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date),
-                repeats: false
-            )
-        }
+        let declencheur = UNCalendarNotificationTrigger(
+            dateMatching: Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: notification.date),
+            repeats: false
+        )
         do {
             try await centre.add(UNNotificationRequest(identifier: notification.identifiant, content: contenu, trigger: declencheur))
         } catch {

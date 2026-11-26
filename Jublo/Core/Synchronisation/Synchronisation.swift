@@ -28,6 +28,13 @@ final class Synchronisation {
         case erreur(String)
     }
 
+    /// Abonnements aux notifications iCloud de l'autre (`Signaux`).
+    enum EtatAbonnements: Equatable {
+        case aVerifier
+        case enregistres
+        case refuses(String)
+    }
+
     enum EtatPartage: Equatable {
         case aucun
         case invitationEnvoyee
@@ -57,6 +64,7 @@ final class Synchronisation {
     private(set) var etat: Etat
     /// Partage de la zone, côté propriétaire.
     private(set) var partage: CKShare?
+    private(set) var etatAbonnements = EtatAbonnements.aVerifier
     /// Faux dans les tests et les aperçus : aucun appel à iCloud.
     let active: Bool
 
@@ -393,6 +401,11 @@ extension Synchronisation {
         await appliquerAbonnements()
     }
 
+    /// Réessaie d'enregistrer les abonnements (retour au premier plan) : sans effet s'ils le sont déjà.
+    func reessayerAbonnements() async {
+        await appliquerAbonnements()
+    }
+
     /// Attend l'envoi des signaux en cours (raccourci Siri, réveil en arrière-plan).
     func terminerSignaux() async {
         let enCours = signauxEnCours
@@ -408,7 +421,10 @@ extension Synchronisation {
         guard active, moteur != nil, let voulus = abonnementsVoulus else { return }
         let rubriques = voulus.rubriques.map(\.rawValue).sorted().joined(separator: ",")
         let empreinte = "\(Self.environnementCourant)|\(role)|\(voulus.membre.rawValue)|\(rubriques)|1"
-        guard stockage.string(forKey: Cle.abonnements) != empreinte else { return }
+        guard stockage.string(forKey: Cle.abonnements) != empreinte else {
+            etatAbonnements = .enregistres
+            return
+        }
         let aEnregistrer: [CKSubscription] = voulus.rubriques.sorted { $0.rawValue < $1.rawValue }.map { rubrique in
             let abonnement = CKDatabaseSubscription(subscriptionID: Signaux.identifiantAbonnement(rubrique))
             abonnement.recordType = Signaux.typeEnregistrement(rubrique, pour: voulus.membre)
@@ -422,19 +438,23 @@ extension Synchronisation {
         let aSupprimer = RubriqueSignal.allCases.filter { !voulus.rubriques.contains($0) }.map(Signaux.identifiantAbonnement)
         do {
             let resultat = try await base.modifySubscriptions(saving: aEnregistrer, deleting: aSupprimer)
-            var reussi = true
+            var refus: String?
             for (identifiant, issue) in resultat.saveResults {
                 if case .failure(let erreur) = issue {
-                    reussi = false
+                    refus = Self.message(erreur)
                     journal.error("Abonnement \(identifiant) refusé : \(erreur)")
                 }
             }
             // Supprimer un abonnement qui n'existe pas échoue sans conséquence.
-            if reussi {
+            if let refus {
+                etatAbonnements = .refuses(refus)
+            } else {
                 stockage.set(empreinte, forKey: Cle.abonnements)
+                etatAbonnements = .enregistres
             }
         } catch {
             journal.error("Abonnements aux signaux impossibles : \(error)")
+            etatAbonnements = .refuses(Self.message(error))
         }
     }
 
@@ -442,24 +462,31 @@ extension Synchronisation {
     private func signaler(_ changement: Changement) {
         guard active, let membre = membreCourant(),
               let rubrique = Signaux.rubrique(changement, maintenant: .now),
-              cadence.autoriser(rubrique, a: .now) else { return }
-        // Jublo peut passer en arrière-plan juste après le changement : on demande un sursis.
-        let sursis = UIApplication.shared.beginBackgroundTask(withName: "Signal")
+              cadence.reserver(rubrique, a: .now) else { return }
+        // Jublo peut passer en arrière-plan juste après le changement : on demande un sursis,
+        // rendu au système s'il expire avant la fin de l'envoi.
+        var sursis = UIBackgroundTaskIdentifier.invalid
+        sursis = UIApplication.shared.beginBackgroundTask(withName: "Signal") {
+            UIApplication.shared.endBackgroundTask(sursis)
+            sursis = .invalid
+        }
         signauxEnCours.append(Task {
-            await self.envoyerSignal(rubrique, de: membre)
+            let envoye = await self.envoyerSignal(rubrique, de: membre)
+            self.cadence.terminer(rubrique, envoyeLe: envoye ? .now : nil)
             if sursis != .invalid {
                 UIApplication.shared.endBackgroundTask(sursis)
+                sursis = .invalid
             }
         })
     }
 
     /// Réécrit l'enregistrement du signal (nom fixe) dans la zone partagée, après avoir envoyé
     /// les données : en touchant la notification, l'autre doit trouver le changement.
-    private func envoyerSignal(_ rubrique: RubriqueSignal, de membre: Membre) async {
+    private func envoyerSignal(_ rubrique: RubriqueSignal, de membre: Membre) async -> Bool {
         await demarrer()
-        guard let moteur else { return }
+        guard let moteur else { return false }
         try? await moteur.sendChanges()
-        guard moteur === self.moteur, etatPartage == .actif || etatPartage == .participant else { return }
+        guard moteur === self.moteur, etatPartage == .actif || etatPartage == .participant else { return false }
         let destinataire = membre.autre
         let signal = CKRecord(
             recordType: Signaux.typeEnregistrement(rubrique, pour: destinataire),
@@ -468,9 +495,12 @@ extension Synchronisation {
         signal["le"] = Date.now
         signal["par"] = membre.rawValue
         do {
-            _ = try await base.modifyRecords(saving: [signal], deleting: [], savePolicy: .allKeys)
+            let resultat = try await base.modifyRecords(saving: [signal], deleting: [], savePolicy: .allKeys)
+            try resultat.saveResults[signal.recordID]?.get()
+            return true
         } catch {
             journal.info("Signal \(rubrique.rawValue) non envoyé : \(error)")
+            return false
         }
     }
 }
@@ -734,6 +764,24 @@ extension Synchronisation {
         partage.publicPermission = .none
         _ = try await base.modifyRecords(saving: enregistrements + [partage], deleting: [])
         _ = try await base.modifyRecordZones(saving: [], deleting: [zoneTemporaire.zoneID])
+    }
+
+    /// Vérifie qu'iCloud accepte un abonnement aux signaux tel que l'app l'enregistre (texte et
+    /// type d'enregistrement), dans la base privée de développement, puis le retire. À lancer
+    /// après `preparerSchema`, qui crée les types de signaux.
+    func testerAbonnementSignal(pour membre: Membre) async throws {
+        let base = conteneurCloudKit.privateCloudDatabase
+        let identifiant = "jublo.test.signal"
+        let abonnement = CKDatabaseSubscription(subscriptionID: identifiant)
+        abonnement.recordType = Signaux.typeEnregistrement(.courses, pour: membre)
+        let notification = CKSubscription.NotificationInfo()
+        notification.title = Signaux.titre(.courses)
+        notification.alertBody = Signaux.texte(.courses, de: membre.autre)
+        notification.soundName = "default"
+        abonnement.notificationInfo = notification
+        let resultat = try await base.modifySubscriptions(saving: [abonnement], deleting: [])
+        _ = try resultat.saveResults[identifiant]?.get()
+        _ = try await base.modifySubscriptions(saving: [], deleting: [identifiant])
     }
 }
 #endif

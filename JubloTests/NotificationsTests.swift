@@ -11,8 +11,6 @@ final class CentreFactice: CentreNotifications {
     var demandes = 0
     /// Rappels programmés, par identifiant.
     var programmees: [String: NotificationPrevue] = [:]
-    /// Notifications envoyées tout de suite.
-    var envoyees: [NotificationPrevue] = []
 
     func statut() async -> StatutNotifications { statutCourant }
 
@@ -25,11 +23,7 @@ final class CentreFactice: CentreNotifications {
     func identifiantsEnAttente() async -> [String] { Array(programmees.keys) }
 
     func programmer(_ notification: NotificationPrevue) async {
-        if notification.date == nil {
-            envoyees.append(notification)
-        } else {
-            programmees[notification.identifiant] = notification
-        }
+        programmees[notification.identifiant] = notification
     }
 
     func retirer(_ identifiants: [String]) {
@@ -160,15 +154,28 @@ struct SignauxTests {
 
     @Test func unSignalParRubriqueToutesLesDixMinutes() {
         var cadence = CadenceSignaux()
-        let premier = cadence.autoriser(.courses, a: maintenant)
-        let rafale = cadence.autoriser(.courses, a: maintenant + 60)
-        let autreRubrique = cadence.autoriser(.agenda, a: maintenant + 60)
-        let plusTard = cadence.autoriser(.courses, a: maintenant + Signaux.intervalle)
+        let premier = cadence.reserver(.courses, a: maintenant)
+        let pendantLEnvoi = cadence.reserver(.courses, a: maintenant)
+        cadence.terminer(.courses, envoyeLe: maintenant)
+        let rafale = cadence.reserver(.courses, a: maintenant + 60)
+        let autreRubrique = cadence.reserver(.agenda, a: maintenant + 60)
+        let plusTard = cadence.reserver(.courses, a: maintenant + Signaux.intervalle)
 
         #expect(premier)
+        #expect(!pendantLEnvoi)
         #expect(!rafale)
         #expect(autreRubrique)
         #expect(plusTard)
+    }
+
+    @Test func unSignalQuiNAPasPuPartirNeBloquePasLeSuivant() {
+        var cadence = CadenceSignaux()
+        let premier = cadence.reserver(.courses, a: maintenant)
+        cadence.terminer(.courses, envoyeLe: nil)
+        let suivant = cadence.reserver(.courses, a: maintenant + 60)
+
+        #expect(premier)
+        #expect(suivant)
     }
 }
 
@@ -192,7 +199,7 @@ struct RappelsProgrammesTests {
     }
 
     private func rappels() -> [NotificationPrevue] {
-        centre.programmees.values.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }
+        centre.programmees.values.sorted { $0.date < $1.date }
     }
 
     @Test func lePenseBeteSonneTantQuIlNEstPasFait() async throws {

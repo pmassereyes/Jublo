@@ -212,15 +212,16 @@ Ne pas les casser :
     (`Signaux.rubrique`), envoie d'abord les données, puis réécrit un **signal** : un
     enregistrement à nom fixe (`signal-courses-julie`) de type `SignalCoursesPourJulie`, dans
     la zone partagée, jamais supprimé (une suppression notifierait aussi). Un signal par
-    rubrique toutes les 10 minutes au plus (`CadenceSignaux`), seulement si le partage est
-    actif.
+    rubrique toutes les 10 minutes au plus (`CadenceSignaux` : un signal qui n'a pas pu
+    partir ne compte pas), seulement si le partage est actif, sous sursis d'arrière-plan.
   - Réception : chaque iPhone s'abonne (`CKDatabaseSubscription`, filtrée sur le type
     `Signal…Pour<son prénom>`, dans la base de son rôle) avec un texte fixé à l'abonnement.
     iCloud affiche la notification sans réveiller Jublo. Le destinataire fait partie du type :
     on ne reçoit jamais ses propres signaux. Abonnements selon Nous › Cet iPhone
     (`notifications.listes`, `notifications.agenda`, `Notificateur.abonnementsVoulus`),
     réenregistrés quand l'empreinte change (`sync.abonnements`, oubliée au changement de rôle
-    ou d'environnement).
+    ou d'environnement) et retentés au retour au premier plan. Un refus d'iCloud s'affiche
+    dans la carte Notifications (`Synchronisation.etatAbonnements`).
   - Règles : ni les suppressions dans les listes, ni les rendez-vous passés, ni un changement
     de rappel seul. Wish list : seulement une envie que l'auteur ajoute pour lui-même (une
     idée pour l'autre ou un cadeau offert gâcheraient la surprise).
@@ -228,8 +229,13 @@ Ne pas les casser :
     `MiroirLocal` ignore les signaux (type inconnu, nom qui n'est pas un UUID).
   - Au premier plan, la notification n'est pas affichée (`willPresent`).
   - Non vérifié sur iPhone à l'écriture (2026-11-26) : à tester sur les deux iPhones en
-    TestFlight. Si la base partagée ignorait le filtre par type, Julie recevrait une
-    notification par enregistrement : couper les deux réglages supprime les abonnements.
+    TestFlight. Nous › Développement › « Tester l'abonnement iCloud » (après « Préparer le
+    schéma ») vérifie qu'iCloud accepte l'abonnement. Si la base partagée ignorait le filtre
+    par type, Julie recevrait une notification par enregistrement : couper les deux réglages
+    supprime les abonnements. Ordre de mise à jour : Pablo installe et ouvre la 0.5 d'abord
+    (chaque iPhone renvoie toute sa base au premier lancement), puis Julie.
+  - Les annonces détaillées calculées à la réception (« Julie a ajouté « Lait » »), qui
+    demandaient que Jublo tourne en arrière-plan, ont été retirées : voir le commit `969585c`.
 - **Réveil** : CloudKit envoie aussi une notification push silencieuse (celle de
   CKSyncEngine) ; `DelegueApplication.application(_:didReceiveRemoteNotification:)`
   synchronise (20 s au plus) puis reprogramme les rappels. iOS limite ces réveils, et ne les

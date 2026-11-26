@@ -104,6 +104,18 @@ struct NousView: View {
                                 .font(.jubloLegende)
                                 .foregroundStyle(.texte)
                         }
+                        Button("Tester l'abonnement iCloud") {
+                            messageSchema = "Test de l'abonnement…"
+                            Task {
+                                do {
+                                    try await synchronisation.testerAbonnementSignal(pour: identite.membre)
+                                    messageSchema = "Abonnement accepté par iCloud."
+                                } catch {
+                                    messageSchema = "Abonnement refusé : \(Synchronisation.message(error))"
+                                }
+                            }
+                        }
+                        .buttonStyle(.pilule(.contour, compacte: true))
                     }
                 }
             }

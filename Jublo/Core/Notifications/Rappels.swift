@@ -34,7 +34,7 @@ enum Rappels {
                 ouvrir: ["onglet": "agenda"]
             ))
         }
-        return Array(prevus.sorted { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }.prefix(maximum))
+        return Array(prevus.sorted { $0.date < $1.date }.prefix(maximum))
     }
 
     /// « Demain à 14:30 · Cabinet · Vous deux », vu au moment du rappel.

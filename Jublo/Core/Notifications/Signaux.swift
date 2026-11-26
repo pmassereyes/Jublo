@@ -85,11 +85,12 @@ enum Signaux {
 
     /// Texte de la notification, vu par le destinataire : `auteur` est l'autre.
     static func texte(_ rubrique: RubriqueSignal, de auteur: Membre) -> String {
-        switch rubrique {
-        case .penseBete: "\(auteur.prenom) a mis à jour le pense-bête"
-        case .courses: "\(auteur.prenom) a mis à jour les courses"
-        case .wishList: "\(auteur.prenom) a ajouté une envie à sa wish list"
-        case .agenda: "\(auteur.prenom) a mis à jour l'agenda"
+        let qui = Libelles.quiEnDebut(auteur, vuPar: auteur.autre)
+        return switch rubrique {
+        case .penseBete: "\(qui) a mis à jour le pense-bête"
+        case .courses: "\(qui) a mis à jour les courses"
+        case .wishList: "\(qui) a ajouté une envie à sa wish list"
+        case .agenda: "\(qui) a mis à jour l'agenda"
         }
     }
 
@@ -115,16 +116,28 @@ enum Signaux {
 }
 
 /// Cadence des signaux : le premier changement d'une rafale part tout de suite, les suivants
-/// de la même rubrique attendent `Signaux.intervalle`.
+/// de la même rubrique attendent `Signaux.intervalle`. Un signal qui n'a pas pu partir (pas de
+/// réseau, partage pas encore actif) ne bloque pas le suivant.
 struct CadenceSignaux {
     private var derniers: [RubriqueSignal: Date] = [:]
+    private var enCours: Set<RubriqueSignal> = []
 
-    /// Vrai si un signal de cette rubrique peut partir maintenant ; le note comme parti.
-    mutating func autoriser(_ rubrique: RubriqueSignal, a date: Date) -> Bool {
+    /// Vrai si un signal de cette rubrique peut partir maintenant ; il est alors réservé
+    /// jusqu'à `terminer`.
+    mutating func reserver(_ rubrique: RubriqueSignal, a date: Date) -> Bool {
+        guard !enCours.contains(rubrique) else { return false }
         if let dernier = derniers[rubrique], date.timeIntervalSince(dernier) < Signaux.intervalle {
             return false
         }
-        derniers[rubrique] = date
+        enCours.insert(rubrique)
         return true
+    }
+
+    /// Fin d'un envoi : `envoyeLe` est nil s'il a échoué.
+    mutating func terminer(_ rubrique: RubriqueSignal, envoyeLe date: Date?) {
+        enCours.remove(rubrique)
+        if let date {
+            derniers[rubrique] = date
+        }
     }
 }
