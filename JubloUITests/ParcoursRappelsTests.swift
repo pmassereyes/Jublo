@@ -67,7 +67,7 @@ final class ParcoursRappelsTests: XCTestCase {
         let quinzeMinutes = app.buttons["15 min avant"]
         XCTAssertTrue(quinzeMinutes.waitForExistence(timeout: 2))
         quinzeMinutes.tap()
-        XCTAssertTrue(app.staticTexts["Le rappel sonnera sur vos deux iPhones."].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Le rappel sonnera sur ton iPhone, et sur celui de Julie dès qu'il aura reçu le rendez-vous."].waitForExistence(timeout: 2))
         XCTAssertTrue(rappel.label.contains("15 min avant"))
         capturer(app, "12-rendez-vous-rappel")
         app.navigationBars.buttons["Ajouter"].tap()

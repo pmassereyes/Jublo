@@ -76,9 +76,14 @@ enum Annonces {
             } else {
                 "\(qui) \(verbe) \(titres.count) \(type == .wishList ? "envies" : "éléments") : \(enumeration(titres))"
             }
+            var ouvrir = ["onglet": "listes", "liste": type.rawValue]
+            if type == .wishList {
+                // Les envies annoncées sont celles de l'autre : on ouvre son côté.
+                ouvrir["pour"] = groupe.auteur.rawValue
+            }
             return NotificationPrevue(
                 identifiant: identifiant, titre: type.titre, corps: corps, fil: "listes.\(type.rawValue)",
-                date: nil, ouvrir: ["onglet": "listes", "liste": type.rawValue]
+                date: nil, ouvrir: ouvrir
             )
         case .agenda:
             let corps: String

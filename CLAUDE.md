@@ -105,8 +105,9 @@ Ne pas les casser :
   relation SwiftData) ; `Destination.cagnotte(parmi:)` ignore une cagnotte à la corbeille.
   `Depot.creerCagnotte(pour:par:)` reprend le nom et le budget du voyage. Une cagnotte n'est
   rattachée qu'à un voyage à la fois (l'écran ne propose que les cagnottes libres). La fiche
-  du voyage verse directement dans la cagnotte : pas de lien vers `CagnotteView`, car un
-  troisième écran empilé depuis la liste des vacances fait boucler SwiftUI (vu le 2026-11-26).
+  du voyage verse directement dans la cagnotte : pas de lien vers `CagnotteView`, car
+  l'ouvrir depuis `DestinationView` faisait boucler SwiftUI (100 % de CPU, cause non
+  identifiée, vu le 2026-11-26 ; Projets › Cagnotte › détail, lui, fonctionne).
 
 ## Synchronisation (CloudKit)
 
@@ -196,7 +197,9 @@ Ne pas les casser :
 - **Rappels** : `Notificateur.replanifier()` lit la base et met les notifications programmées
   (identifiants `rappel.<uuid>`) en accord avec elle. Il est appelé après chaque
   enregistrement du contexte (`ModelContext.didSave`, donc aussi pour ce qui vient de
-  CloudKit), au retour au premier plan et quand le membre change. Pense-bête : sur les deux
+  CloudKit), après chaque formulaire de rappel, au retour au premier plan, au passage en
+  arrière-plan et quand le membre change (`didSave` n'est vérifié que sur iOS 27 : les autres
+  appels servent de filet). Pense-bête : sur les deux
   iPhones, sauf élément coché ou à la corbeille. Rendez-vous : chez le membre concerné, ou
   chez les deux (`Evenement.estPour`). 60 au plus (iOS en garde 64).
 - **Annonces** (« Julie a ajouté « Lait » ») : `MiroirLocal.appliquer` renvoie les

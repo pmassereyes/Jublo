@@ -208,8 +208,9 @@ struct DestinationView: View {
     @ViewBuilder private var sectionCagnotte: some View {
         VStack(alignment: .leading, spacing: 8) {
             TitreSection(titre: "Cagnotte")
-            // Pas de lien vers le détail de la cagnotte : un troisième écran empilé depuis la liste
-            // des vacances fait boucler SwiftUI. On verse d'ici ; l'historique est dans Projets › Cagnotte.
+            // Pas de lien vers le détail de la cagnotte : l'ouvrir d'ici faisait boucler SwiftUI
+            // (cause non identifiée, vu le 2026-11-26). On verse d'ici ; l'historique est dans
+            // Projets › Cagnotte.
             if let cagnotte = destination.cagnotte(parmi: cagnottes) {
                 Carte {
                     VStack(alignment: .leading, spacing: 10) {

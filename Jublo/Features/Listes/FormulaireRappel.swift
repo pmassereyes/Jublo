@@ -7,6 +7,7 @@ struct FormulaireRappel: View {
 
     @Environment(Depot.self) private var depot
     @Environment(Notificateur.self) private var notificateur
+    @Environment(Identite.self) private var identite
     @Environment(\.dismiss) private var fermer
 
     @State private var date = FormulaireRappel.parDefaut()
@@ -25,13 +26,14 @@ struct FormulaireRappel: View {
                 DatePicker("Quand", selection: $date, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
                     .environment(\.locale, .jublo)
             } footer: {
-                Text("Le rappel sonnera sur vos deux iPhones, sauf si l'élément est coché avant.")
+                Text(Libelles.rappelPenseBete(vuPar: identite.membre))
                     .font(.jubloLegende)
             }
             if element.rappelLe != nil {
                 Section {
                     Button("Retirer le rappel", role: .destructive) {
                         depot.programmerRappel(nil, pour: element)
+                        notificateur.planifierBientot()
                         fermer()
                     }
                 }
@@ -50,6 +52,7 @@ struct FormulaireRappel: View {
 
     private func enregistrer() {
         depot.programmerRappel(date, pour: element)
+        notificateur.planifierBientot()
         Task { await notificateur.demanderAutorisationSiBesoin() }
     }
 

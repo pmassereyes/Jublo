@@ -318,6 +318,7 @@ struct FormulaireEvenement: View {
         let debutFinal = journeeEntiere ? calendrier.startOfDay(for: debut) : debut
         let finFinale: Date? = avecFin ? (journeeEntiere ? calendrier.startOfDay(for: fin) : fin) : nil
         let rappelFinal = rappel?.adapte(journeeEntiere: journeeEntiere)
+        defer { notificateur.planifierBientot() }
         if rappelFinal != nil {
             Task { await notificateur.demanderAutorisationSiBesoin() }
         }

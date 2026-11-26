@@ -20,7 +20,7 @@ struct CarteNotifications: View {
                 case .autorisees:
                     Toggle(Libelles.quandLAutreModifie("les listes", vuPar: identite.membre), isOn: $notificateur.annoncerListes)
                     Toggle(Libelles.quandLAutreModifie("l'agenda", vuPar: identite.membre), isOn: $notificateur.annoncerAgenda)
-                    Text("Elles arrivent quand Jublo tourne en arrière-plan, parfois avec un peu de retard. Les rappels du pense-bête et de l'agenda sonnent toujours.")
+                    Text("Elles arrivent quand Jublo tourne en arrière-plan, parfois avec du retard, et pas si l'app a été fermée depuis le sélecteur d'apps. Ces réglages ne touchent pas aux rappels.")
                         .font(.jubloLegende)
                         .foregroundStyle(.texteSecondaire)
                 case .aDemander:

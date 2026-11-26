@@ -100,6 +100,9 @@ struct JubloApp: App {
                 }
                 .onChange(of: identite.membre) { notificateur.planifierBientot() }
                 .onChange(of: phase) {
+                    if phase == .background {
+                        Task { await notificateur.replanifier() }
+                    }
                     if phase == .active {
                         Task { await synchronisation.synchroniserMaintenant() }
                         Task {

@@ -208,6 +208,7 @@ struct AnnoncesTests {
 
         #expect(resultat.map(\.corps) == ["Julie a ajouté « Plaid » à ses envies"])
         #expect(resultat.first?.titre == "Wish list")
+        #expect(resultat.first?.ouvrir == ["onglet": "listes", "liste": "wishList", "pour": "julie"])
     }
 
     @Test func lesPreferencesCoupentChaqueRubrique() {
@@ -400,5 +401,22 @@ struct RappelsProgrammesTests {
         let second = Notificateur(contexte: banc.conteneur.mainContext, identite: identite, centre: centre, stockage: stockage)
         #expect(!second.annoncerListes)
         #expect(second.annoncerAgenda)
+    }
+}
+
+@MainActor
+struct NavigationTests {
+    @Test func uneNotificationOuvreLOngletEtLaListe() {
+        let navigation = Navigation(onglet: .accueil)
+
+        navigation.ouvrir(["onglet": "listes", "liste": "wishList", "pour": "julie"])
+
+        #expect(navigation.onglet == .listes)
+        #expect(navigation.listeDemandee == .wishList)
+        #expect(navigation.enviesDemandeesPour == .julie)
+
+        navigation.ouvrir(["onglet": "agenda"])
+        #expect(navigation.onglet == .agenda)
+        #expect(navigation.listeDemandee == nil)
     }
 }

@@ -79,7 +79,11 @@ struct ListesView: View {
     private func ouvrirListeDemandee() {
         guard let demandee = navigation.listeDemandee else { return }
         type = demandee
+        if let pour = navigation.enviesDemandeesPour {
+            cote = pour == identite.membre ? .moi : .autre
+        }
         navigation.listeDemandee = nil
+        navigation.enviesDemandeesPour = nil
     }
 
     private var champAjout: some View {
