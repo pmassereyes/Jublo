@@ -138,6 +138,7 @@ extension Destination: Synchronisable {
         enregistrement["statutBrut"] = statutBrut
         enregistrement["avisPablo"] = avisPablo
         enregistrement["avisJulie"] = avisJulie
+        enregistrement["cagnotteId"] = cagnotteId?.uuidString
         enregistrement.remplirSuppressible(self)
     }
 
@@ -149,6 +150,7 @@ extension Destination: Synchronisable {
         statutBrut = enregistrement["statutBrut"] as? String ?? StatutDestination.envisagee.rawValue
         avisPablo = enregistrement["avisPablo"] as? Int
         avisJulie = enregistrement["avisJulie"] as? Int
+        cagnotteId = (enregistrement["cagnotteId"] as? String).flatMap(UUID.init(uuidString:))
         enregistrement.reprendreSuppressible(self)
     }
 }

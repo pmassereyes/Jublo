@@ -18,7 +18,7 @@ enum StatutDestination: String, CaseIterable, Identifiable {
     }
 }
 
-extension SchemaV4 {
+extension SchemaV5 {
     /// Idée de vacances, que chacun note pour comparer à deux.
     @Model
     final class Destination {
@@ -31,6 +31,9 @@ extension SchemaV4 {
         var statutBrut: String = StatutDestination.envisagee.rawValue
         var avisPablo: Int?
         var avisJulie: Int?
+        /// Cagnotte rattachée au voyage (depuis la V5). Un simple identifiant : la cagnotte
+        /// vit sa vie (corbeille, versements) sans dépendre du voyage.
+        var cagnotteId: UUID?
 
         var auteurId: String = ""
         var creeLe: Date = Date.now
@@ -54,5 +57,11 @@ extension Destination: Suppressible, AvisDuCouple {
 
     static var actives: Predicate<Destination> {
         #Predicate { $0.supprimeLe == nil }
+    }
+
+    /// Cagnotte rattachée, si elle est parmi `cagnottes` et hors corbeille.
+    func cagnotte(parmi cagnottes: [Cagnotte]) -> Cagnotte? {
+        guard let cagnotteId else { return nil }
+        return cagnottes.first { $0.id == cagnotteId && $0.supprimeLe == nil }
     }
 }

@@ -132,6 +132,20 @@ final class Depot {
         modifier(destination) { $0.statutBrut = statut.rawValue }
     }
 
+    /// Rattache une cagnotte à un voyage, ou l'en détache avec nil.
+    func rattacher(_ cagnotte: Cagnotte?, a destination: Destination) {
+        guard destination.cagnotteId != cagnotte?.id else { return }
+        modifier(destination) { $0.cagnotteId = cagnotte?.id }
+    }
+
+    /// Crée la cagnotte d'un voyage : son nom, et son budget pour objectif.
+    @discardableResult
+    func creerCagnotte(pour destination: Destination, par membre: Membre) -> Cagnotte {
+        let cagnotte = creerCagnotte(destination.nom, objectifCentimes: destination.budgetCentimes, par: membre)
+        rattacher(cagnotte, a: destination)
+        return cagnotte
+    }
+
     // MARK: - Sorties à tester
 
     @discardableResult

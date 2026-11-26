@@ -62,7 +62,8 @@ struct CagnottesView: View {
     }
 }
 
-private struct LigneCagnotte: View {
+/// Nom, solde et progression d'une cagnotte (liste des cagnottes, fiche d'un voyage).
+struct LigneCagnotte: View {
     let cagnotte: Cagnotte
 
     var body: some View {
@@ -94,6 +95,7 @@ struct CagnotteView: View {
 
     @Environment(Depot.self) private var depot
     @Environment(Identite.self) private var identite
+    @Query(filter: Destination.actives) private var destinations: [Destination]
     @Environment(\.dismiss) private var fermer
     @State private var verser = false
     @State private var modifier = false
@@ -111,6 +113,9 @@ struct CagnotteView: View {
                         Text(resteAVerser(objectif))
                             .font(.jubloLegende)
                             .foregroundStyle(.texteSecondaire)
+                    }
+                    if let voyage = destinations.first(where: { $0.cagnotteId == cagnotte.id }) {
+                        LigneInfo(symbole: "airplane", texte: "Pour le voyage : \(voyage.nom)")
                     }
                     HStack(spacing: Mesures.espacement) {
                         ForEach([identite.membre, identite.membre.autre]) { membre in

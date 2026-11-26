@@ -123,7 +123,7 @@ struct RappelsTests {
 
 @MainActor
 struct MigrationV5Tests {
-    @Test func uneBaseV4GardeSesDonneesSansRappel() throws {
+    @Test func uneBaseV4GardeSesDonneesSansRappelNiCagnotteDeVoyage() throws {
         let dossier = FileManager.default.temporaryDirectory.appending(path: "jublo-migration-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dossier, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dossier) }
@@ -143,6 +143,9 @@ struct MigrationV5Tests {
             evenement.lieu = "Cabinet"
             contexte.insert(evenement)
             contexte.insert(SchemaV4.Souhait(texte: "cuisines un soir", mois: "2026-11", auteur: .julie, le: date))
+            let lisbonne = SchemaV4.Destination(nom: "Lisbonne", auteur: .julie, le: date)
+            lisbonne.avisPablo = 4
+            contexte.insert(lisbonne)
             try contexte.save()
         }
 
@@ -157,6 +160,10 @@ struct MigrationV5Tests {
         #expect(evenement.concerne == .julie)
         #expect(evenement.rappel == nil)
         #expect(try contexte.fetchCount(FetchDescriptor<Souhait>()) == 1)
+        let lisbonne = try #require(try contexte.fetch(FetchDescriptor<Destination>()).first)
+        #expect(lisbonne.nom == "Lisbonne")
+        #expect(lisbonne.avis(de: .pablo) == 4)
+        #expect(lisbonne.cagnotteId == nil)
 
         let depot = Depot(contexte: contexte, horloge: { date })
         depot.programmerRappel(date, pour: element)

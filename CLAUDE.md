@@ -19,6 +19,9 @@ que tu… », corbeille, puis un assistant IA local.
 - **Phase 5 (code fait le 2026-11-24, version 0.4)** : raccourci Siri « Ajoute un rendez-vous
   dans Jublo » (voir la section Siri) et assistant étendu à l'agenda, aux projets et aux
   souhaits du mois. Aucun changement de schéma.
+- **Phase 6 (code fait le 2026-11-26, version 0.5, schéma V5)** : rappels en notification
+  (pense-bête et agenda), notification chez l'autre quand une liste ou l'agenda change, wish
+  list « À offrir » / « Offert », cagnotte rattachée à un voyage. Voir la section Notifications.
 - **Phase 3 (assistant, faite avant la phase 2)** : discussion en lecture seule sur les listes,
   via une API au format « chat completions » d'OpenAI. Le fournisseur se choisit dans les
   réglages (Mistral, DeepSeek, Gemini, ou Ollama chez nous via `tailscale serve`). La
@@ -52,12 +55,13 @@ Ne pas les casser :
 3. Chaque modèle a un `id: UUID` stable, futur nom d'enregistrement CloudKit.
 4. Contraintes compatibles CloudKit : toutes les propriétés sont optionnelles ou ont une valeur
    par défaut, aucun `@Attribute(.unique)`, relations optionnelles.
-5. Schéma versionné. `SchemaActuel` désigne la version courante (aujourd'hui `SchemaV4`), et
-   `PlanMigrationJublo` liste les versions et les étapes de migration (dans `SchemaV4.swift`). Toute évolution passe
-   par une nouvelle version : on copie le modèle modifié dans `SchemaVn`, on fige l'ancien, et
-   on ajoute une étape et un test dans `MigrationTests`. Un modèle inchangé reste déclaré dans
-   la dernière version où il a changé (`Cagnotte` et `Versement` sont dans `SchemaV1`).
-   On ne modifie jamais une version publiée.
+5. Schéma versionné. `SchemaActuel` désigne la version courante (aujourd'hui `SchemaV5`), et
+   `PlanMigrationJublo` liste les versions et les étapes de migration (dans `SchemaV5.swift`). Toute évolution passe
+   par une nouvelle version : on copie le modèle modifié dans `SchemaVn`, on fige l'ancien (dans
+   `SchemaVn-1.swift`), et on ajoute une étape et un test de migration (`MigrationV5Tests`…).
+   Un modèle inchangé reste déclaré dans la dernière version où il a changé : `Cagnotte` et
+   `Versement` dans `SchemaV1`, `Sortie`, `Retard` et `Souhait` dans `SchemaV4`, `ElementListe`,
+   `Evenement` et `Destination` dans `SchemaV5`. On ne modifie jamais une version publiée.
 6. Montants en centimes (`Int`), énumérations stockées en `String` (`typeBrut`).
 
 ## Modèles
@@ -90,7 +94,19 @@ Ne pas les casser :
 - **Wish list par membre** : chaque envie a un destinataire (`pourId`, depuis la V2). Par
   défaut, c'est l'auteur ; on peut aussi noter une idée pour l'autre. Une envie sans
   `pourId`, créée avant la V2, est celle de son auteur (`destinataire`,
-  `ElementListe.envies(pour:)`).
+  `ElementListe.envies(pour:)`). Dans la wish list, un élément coché est « Offert » et non
+  « Fait » : les libellés viennent de `TypeListe` (`libelleEnAttente`, `libelleTermine`,
+  `libelleCochePar`), y compris pour l'assistant.
+- **Rappels (V5)** : `ElementListe.rappelLe` (pense-bête seulement, `Depot.programmerRappel`)
+  et `Evenement.rappelBrut` (`RappelEvenement` : minutes, heures ou jours avant ; pour une
+  journée entière, 9 h le jour même ou avant, 18 h la veille). Synchronisés : le rappel est le
+  même sur les deux iPhones, mais chacun le programme pour soi (voir Notifications).
+- **Cagnotte d'un voyage (V5)** : `Destination.cagnotteId`, un simple identifiant (pas de
+  relation SwiftData) ; `Destination.cagnotte(parmi:)` ignore une cagnotte à la corbeille.
+  `Depot.creerCagnotte(pour:par:)` reprend le nom et le budget du voyage. Une cagnotte n'est
+  rattachée qu'à un voyage à la fois (l'écran ne propose que les cagnottes libres). La fiche
+  du voyage verse directement dans la cagnotte : pas de lien vers `CagnotteView`, car un
+  troisième écran empilé depuis la liste des vacances fait boucler SwiftUI (vu le 2026-11-26).
 
 ## Synchronisation (CloudKit)
 
@@ -110,6 +126,9 @@ Ne pas les casser :
   locale.
 - Invitation : Nous › Partage › « Inviter Julie », via la feuille de partage d'iOS. Le lien
   ouvre Jublo, puis `DelegueScene` appelle `Synchronisation.accepter`.
+- Champs ajoutés par la V5 (`versionSchemaSync` 3) : `ElementListe.rappelLe`,
+  `Evenement.rappelBrut`, `Destination.cagnotteId`. **À déployer en production avant le
+  premier build TestFlight de la 0.5.**
 - **Ajouter un modèle ou un champ synchronisé** : le rendre `Synchronisable`, l'ajouter à
   `MiroirLocal` (`typesEnregistrement`, `fabriquer`, `modele`, `tousLesModeles`) et à
   `preparerSchema` (chaque champ optionnel rempli, sinon il n'est pas créé), **augmenter
@@ -168,6 +187,37 @@ Ne pas les casser :
 - Toute donnée ajoutée au contexte passe par `ContexteAssistant` et ses tests
   (`ContexteAssistantTests`).
 
+## Notifications
+
+- `Core/Notifications/` : `Notificateur` (une instance, dans l'environnement), `Rappels`,
+  `Annonces`, et `CentreNotifications` (protocole : `CentreSysteme` pour
+  `UNUserNotificationCenter`, `CentreInerte` avec `-baseEnMemoire`, dans les tests et les
+  aperçus). L'autorisation est demandée une fois le membre choisi, au lancement.
+- **Rappels** : `Notificateur.replanifier()` lit la base et met les notifications programmées
+  (identifiants `rappel.<uuid>`) en accord avec elle. Il est appelé après chaque
+  enregistrement du contexte (`ModelContext.didSave`, donc aussi pour ce qui vient de
+  CloudKit), au retour au premier plan et quand le membre change. Pense-bête : sur les deux
+  iPhones, sauf élément coché ou à la corbeille. Rendez-vous : chez le membre concerné, ou
+  chez les deux (`Evenement.estPour`). 60 au plus (iOS en garde 64).
+- **Annonces** (« Julie a ajouté « Lait » ») : `MiroirLocal.appliquer` renvoie les
+  `ChangementRecu` (élément ou rendez-vous inconnu ici, ou version reçue strictement plus
+  récente) ; `Synchronisation.surReception` les passe à `Notificateur.annoncer`, qui en fait
+  une notification par liste et par nature (`Annonces`). Rien pendant la relecture initiale
+  d'une zone (`lectureInitiale` : moteur parti sans état, nouveau `versionSchemaSync`), rien
+  au premier plan, rien de plus de 24 h, ni ses propres changements, ni les suppressions dans
+  les listes, ni les rendez-vous passés. Wish list : seules les envies que l'autre ajoute pour
+  lui-même (une idée pour toi ou un cadeau offert gâcheraient la surprise). Un changement de
+  rappel seul n'est pas annoncé. Réglages par iPhone dans Nous › Cet iPhone
+  (`notifications.listes`, `notifications.agenda`).
+- **Réveil** : CloudKit envoie une notification push silencieuse ;
+  `DelegueApplication.application(_:didReceiveRemoteNotification:)` synchronise (20 s au
+  plus), attend l'envoi des annonces et reprogramme les rappels. iOS limite ces réveils et ne
+  les fait pas pour une app fermée depuis le sélecteur d'apps : l'annonce peut arriver en
+  retard, ou seulement à la prochaine ouverture (sans notification, l'app étant au premier
+  plan). Ça ne se teste que sur les deux iPhones, avec TestFlight.
+- Toucher une notification ouvre l'onglet (et la liste) concerné : `Navigation`, dans
+  l'environnement, porte l'onglet de `RacineView` et la liste demandée à `ListesView`.
+
 ## Siri
 
 - `Features/Siri/` : intention `AjouterRendezVous` (titre, date, « pour » : nous deux, moi,
@@ -214,14 +264,15 @@ iCloud.
 
 ```
 Jublo/
-├── App/             point d'entrée, TabView racine
-├── Core/            Modeles/, Persistance/, Identite/, Assistant/, Synchronisation/ (aucune vue)
+├── App/             point d'entrée, TabView racine, Navigation, délégué (push, notifications)
+├── Core/            Modeles/, Persistance/, Identite/, Assistant/, Synchronisation/,
+│                    Notifications/ (aucune vue)
 ├── DesignSystem/    couleurs, typographie, composants réutilisables, polices
 ├── Features/        un dossier par fonctionnalité (Accueil, Listes, Agenda, Projets, Nous,
 │                    Corbeille, Assistant, Siri)
 └── Ressources/      asset catalog
-JubloTests/          Swift Testing, base en mémoire, horloge injectée (`Banc`)
-JubloUITests/        XCUITest : parcours Listes → corbeille sur base vierge
+JubloTests/          Swift Testing, base en mémoire, horloge injectée (`Banc`), `CentreFactice`
+JubloUITests/        XCUITest : parcours sur base vierge (listes, projets, rappels, assistant)
 ```
 
 Navigation : TabView à 5 onglets (Accueil, Listes, Agenda, Projets, Nous). L'assistant et la
@@ -290,7 +341,8 @@ Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFli
 (version 0.2) envoyé le 2026-11-24, premier build avec la synchronisation CloudKit. Build 41
 (0.2) le même jour : clavier des listes. Build 46 (version 0.3) le même jour : l'app complète
 (schéma V4). Build 52 (version 0.4) le même jour : Siri et assistant étendu (sans changement
-de schéma).
+de schéma). Version 0.5 (schéma V5, phase 6) : pas encore envoyée, schéma CloudKit à déployer
+d'abord.
 
 **Un build TestFlight expire 90 jours après son envoi** : il ne s'ouvre plus, mais les
 données restent (sur l'iPhone et dans iCloud) et un build plus récent s'installe par-dessus.

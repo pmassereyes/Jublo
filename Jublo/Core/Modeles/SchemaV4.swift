@@ -46,3 +46,31 @@ extension SchemaV4 {
         }
     }
 }
+
+extension SchemaV4 {
+    /// Idée de vacances telle qu'en V4 (sans cagnotte).
+    @Model
+    final class Destination {
+        var id: UUID = UUID()
+        var nom: String = ""
+        var quand: String?
+        var budgetCentimes: Int?
+        var note: String?
+        var statutBrut: String = StatutDestination.envisagee.rawValue
+        var avisPablo: Int?
+        var avisJulie: Int?
+
+        var auteurId: String = ""
+        var creeLe: Date = Date.now
+        var modifieLe: Date = Date.now
+        var supprimeLe: Date?
+        var supprimePar: String?
+
+        init(nom: String, auteur: Membre, le date: Date) {
+            self.nom = nom
+            auteurId = auteur.rawValue
+            creeLe = date
+            modifieLe = date
+        }
+    }
+}

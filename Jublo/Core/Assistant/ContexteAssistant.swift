@@ -46,7 +46,7 @@ enum ContexteAssistant {
         lignes += listes(donnees.elements.filter { $0.supprimeLe == nil }, membre: membre)
         lignes += agenda(donnees.evenements.filter { $0.supprimeLe == nil }, maintenant: maintenant, calendrier: calendrier)
         lignes += cagnottes(donnees.cagnottes.filter { $0.supprimeLe == nil })
-        lignes += vacances(donnees.destinations.filter { $0.supprimeLe == nil })
+        lignes += vacances(donnees.destinations.filter { $0.supprimeLe == nil }, cagnottes: donnees.cagnottes)
         lignes += sorties(donnees.sorties.filter { $0.supprimeLe == nil }, calendrier: calendrier)
         lignes += souhaits(donnees.souhaits.filter { $0.supprimeLe == nil }, maintenant: maintenant, calendrier: calendrier)
         return lignes.joined(separator: "\n")
@@ -141,7 +141,7 @@ enum ContexteAssistant {
         return lignes
     }
 
-    private static func vacances(_ destinations: [Destination]) -> [String] {
+    private static func vacances(_ destinations: [Destination], cagnottes: [Cagnotte]) -> [String] {
         var lignes = ["", "## Vacances envisagées"]
         guard !destinations.isEmpty else { return lignes + ["(aucune idée)"] }
         // Envisagées, puis réservées, puis faites ; les plus désirées d'abord.
@@ -153,6 +153,9 @@ enum ContexteAssistant {
             var details = [destination.statut.titre.lowercased()]
             if let quand = destination.quand { details.append("quand : \(quand)") }
             if let budget = destination.budgetCentimes { details.append("budget \(Formats.montant(budget))") }
+            if let cagnotte = destination.cagnotte(parmi: cagnottes) {
+                details.append("cagnotte « \(cagnotte.nom) » : \(Formats.montant(cagnotte.soldeCentimes)) de côté")
+            }
             details.append(envies(destination))
             if let note = destination.note { details.append("note : \(note)") }
             return "- \(destination.nom) (\(details.joined(separator: " ; ")))"
