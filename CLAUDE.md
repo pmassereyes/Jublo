@@ -242,6 +242,15 @@ Ne pas les casser :
   fait pas pour une app fermée depuis le sélecteur d'apps.
 - Toucher une notification ouvre l'onglet (et la liste) concerné : `Navigation`, dans
   l'environnement, porte l'onglet de `RacineView` et la liste demandée à `ListesView`.
+- **Délégué des notifications isolé au fil principal** : `DelegueApplication` se conforme à
+  `@preconcurrency UNUserNotificationCenterDelegate`, avec des méthodes `async` sans
+  `nonisolated`. En `nonisolated async`, Swift rend la réponse à iOS depuis un fil
+  d'arrière-plan, et UIKit arrête l'app (assertion dans
+  `-[UIApplication _performBlockAfterCATransactionCommitSynchronizes:]`) : c'est ce qui
+  faisait planter le build 64 au toucher d'une notification. Pour le reproduire dans le
+  simulateur : `xcrun simctl push <simulateur> com.pmassereyes.jublo <fichier.apns>` avec
+  Jublo en arrière-plan, puis toucher la bannière (un test d'interface peut la toucher via
+  `XCUIApplication(bundleIdentifier: "com.apple.springboard")`).
 
 ## Siri
 

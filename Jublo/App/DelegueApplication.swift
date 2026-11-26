@@ -40,10 +40,13 @@ final class DelegueApplication: NSObject, UIApplicationDelegate {
     }
 }
 
-extension DelegueApplication: UNUserNotificationCenterDelegate {
+/// Méthodes isolées au fil principal (`@preconcurrency`), et non `nonisolated` : iOS attend
+/// leur réponse sur le fil principal. Une version `nonisolated` répondait depuis un fil
+/// d'arrière-plan, et UIKit arrêtait Jublo dès qu'on touchait une notification (build 64).
+extension DelegueApplication: @preconcurrency UNUserNotificationCenterDelegate {
     /// App au premier plan : les rappels s'affichent, pas les notifications « l'autre a mis à
     /// jour… » (l'écran montre déjà le changement).
-    nonisolated func userNotificationCenter(
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
@@ -52,7 +55,7 @@ extension DelegueApplication: UNUserNotificationCenterDelegate {
 
     /// Notification touchée : on ouvre l'onglet (et la liste) dont elle parle. Un rappel le dit
     /// dans ses infos ; une notification d'iCloud, par son abonnement (`Signaux`).
-    nonisolated func userNotificationCenter(
+    func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
@@ -68,9 +71,7 @@ extension DelegueApplication: UNUserNotificationCenterDelegate {
                 }
             }
         }
-        await MainActor.run { [infos] in
-            Navigation.courante?.ouvrir(infos)
-        }
+        Navigation.courante?.ouvrir(infos)
     }
 }
 
