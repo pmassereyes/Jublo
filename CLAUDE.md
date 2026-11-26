@@ -19,7 +19,7 @@ que tu… », corbeille, puis un assistant IA local.
 - **Phase 5 (code fait le 2026-11-24, version 0.4)** : raccourci Siri « Ajoute un rendez-vous
   dans Jublo » (voir la section Siri) et assistant étendu à l'agenda, aux projets et aux
   souhaits du mois. Aucun changement de schéma.
-- **Phase 6 (build 64, version 0.5, envoyé le 2026-11-26, schéma V5)** : rappels en notification
+- **Phase 6 (builds 64 et 67, version 0.5, envoyés le 2026-11-26, schéma V5)** : rappels en notification
   (pense-bête et agenda), notification chez l'autre (même app fermée) quand une liste ou
   l'agenda change, wish list « À offrir » / « Offert », cagnotte rattachée à un voyage. Voir
   la section Notifications.
@@ -377,10 +377,11 @@ Historique : build 20 (version 0.1) envoyé le 2026-11-09, premier build TestFli
 (schéma V4). Build 52 (version 0.4) le même jour : Siri et assistant étendu (sans changement
 de schéma). Build 64 (version 0.5) le 2026-11-26 : rappels, notifications chez l'autre,
 wish list « offert », cagnotte d'un voyage (schéma V5, déployé en production le même jour).
+Build 67 (0.5) le même jour : correctif du plantage au toucher d'une notification.
 
 **Un build TestFlight expire 90 jours après son envoi** : il ne s'ouvre plus, mais les
 données restent (sur l'iPhone et dans iCloud) et un build plus récent s'installe par-dessus.
-Le build 64 expire vers le **2027-02-24** : envoyer un nouveau build vers mi-février 2027
+Le build 67 expire vers le **2027-02-24** : envoyer un nouveau build vers mi-février 2027
 (un commit suffit, le numéro de build étant le nombre de commits).
 
 ## Conventions
